@@ -20,4 +20,4 @@ any other (non-whitespace) character is treated as missing data.
 
 All accessions must have a genotypes string of the same length.
 
- 
+Strategy is to compare genotype k-mers.
