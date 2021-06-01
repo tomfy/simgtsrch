@@ -6,14 +6,50 @@
 #include <regex.h>
 
 long* shuffled(int n);
+long get_power(long base, long power);
 
 //************************************************************
-
+// *****  typedef declarations *****
 typedef struct{
   long capacity; // allocated size
   long size; // number of elements
   long* a; // array
 } Vlong;
+
+typedef struct{
+  long capacity; // allocated size
+  long size; // number of elements
+  char** a; // array of strings
+} Vstr;
+
+typedef struct{ // genotype set
+  long index;
+  char* gtset;
+  Vlong* chunk_patterns;
+} Gts;
+
+typedef struct{
+  long capacity; // allocated size
+  long size; // number of elements
+  Gts** a; // array of Gts* (genotype set)
+} Vgts;
+
+typedef struct{
+  long capacity;
+  long size;
+  Vlong** a; // array of Vlong*
+} Pattern_ids;
+
+typedef struct{
+  long capacity;
+  long size;
+  Pattern_ids** a; // array Pattern_ids
+} Chunk_pattern_ids;
+
+
+// ***** 'methods' *****
+
+// *****  Vlong  *****
 
 Vlong* construct_vlong(long cap){
   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
@@ -37,22 +73,31 @@ Vlong* construct_vlong_whole_numbers(long size){ // initialize to 0,1,2,3,...siz
 void add_long_to_vlong(Vlong* the_vlong, long x){
   long cap = the_vlong->capacity;
   long n = the_vlong->size;
+  //  printf("cap n: %ld %ld\n", cap, n);
   // if necessary, resize w realloc
   if(n == cap){
     cap *= 2;
-    the_vlong->a = (long*)realloc(the_vlong->a, cap*sizeof(char*));
+    the_vlong->a = (long*)realloc(the_vlong->a, cap*sizeof(long));
+    printf("realloc in add_long_to_vlong. new cap: %ld\n", cap);
   }
+  //  printf("after realloc. cap: %ld \n", cap);
   the_vlong->a[n] = x;
+  //  printf("after assignment to a[n]\n");
   the_vlong->size++;
+  // printf("about to return from add_long_to_vlong. size %ld\n", the_vlong->size);
 }
 
-// ************************************************************
+void shuffle_vlong(Vlong* the_vlong){
+  long n = the_vlong->size;
+  for(long i=0; i<n-1; i++){ // shuffle
+    int j = i+1 + (long)((n-1-i)*(double)rand()/RAND_MAX); // Use a better rng here!
+    long tmp = the_vlong->a[j];
+    the_vlong->a[j] = the_vlong->a[i];
+    the_vlong->a[i] = tmp;
+  }
+}
 
-typedef struct{
-  long capacity; // allocated size
-  long size; // number of elements
-  char** a; // array of strings
-} Vstr;
+// *****  Vstr  ***************************************************
 
 Vstr* construct_vstr(long min_size){
   Vstr* the_vstr = (Vstr*)malloc(1*sizeof(Vstr));
@@ -75,13 +120,9 @@ void add_string_to_vstr(Vstr* the_vstr, char* str){
   the_vstr->size++;
 }
 
-//****************************************************************
+// *****  Gts  ****************************************************
 
-typedef struct{ // genotype set
-  long index;
-  char* gtset;
-  long* chunk_patterns;
-} Gts;
+
 
 Gts* construct_gts(long index, char* gtset){
   Gts* the_gts = (Gts*)malloc(1*sizeof(Gts));
@@ -91,14 +132,18 @@ Gts* construct_gts(long index, char* gtset){
   return the_gts;
 }
 
-void gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k){
-  long* chunk_pats = (long*)malloc(n_chunks*sizeof(long));
-  long pat = 0;
-  long f = 1;
-  for(int i_chunk=0; i_chunk < n_chunks; i_chunk++){
+void set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k){ 
+  if(n_chunks*k > m_indices->size){
+    n_chunks = m_indices->size/k;
+    fprintf(stderr, "Reducing number of chunks to %ld\n", n_chunks);
+  }
+  Vlong* chunk_pats = construct_vlong(n_chunks); // (Vlong*)malloc(n_chunks*sizeof(Vlong));
+  for(long i_chunk=0; i_chunk < n_chunks; i_chunk++){
+    int i_chunkstart = k*i_chunk;
+    long pat = 0;
+    long f = 1;
     for(int j=0; j < k; j++){
-      int jdx = (i_chunk*k+j) % m_indices->size;
-      int idx = m_indices->a[jdx];
+      int idx = m_indices->a[i_chunkstart + j];
       char a = the_gts->gtset[idx] - 48;
       if((a>=0) && (a<=2)){
 	pat += f*a;
@@ -108,7 +153,9 @@ void gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k){
 	break;
       }
     }
-    chunk_pats[i_chunk] = pat;
+    printf("chunk: %ld  pat: %ld \n", i_chunk, pat);
+    add_long_to_vlong(chunk_pats, pat);
+    printf("after add_long_to_vlong\n");
   }
   the_gts->chunk_patterns = chunk_pats;
 }
@@ -117,20 +164,15 @@ char* print_gts(Gts* the_gts){
   printf("Gts index: %ld  gtset: %s\n", the_gts->index, the_gts->gtset);
 }
 
-// ****************************************************************
 
-typedef struct{
-  long capacity; // allocated size
-  long size; // number of elements
-  Gts** a; // array of Gts* (genotype set)
-} Vgts;
+// *****  Vgts  ***********************************************************
 
 Vgts* construct_vgts(long min_size){
   Vgts* the_vgts = (Vgts*)malloc(1*sizeof(Vgts));
   the_vgts->capacity = min_size;
   the_vgts->size = 0;
   the_vgts->a = (Gts**)malloc(min_size*sizeof(Gts*));
-  printf("returning from construct_vgts\n");
+  //  printf("returning from construct_vgts\n");
   return the_vgts;
 }
 
@@ -146,10 +188,95 @@ void add_gts_to_vgts(Vgts* the_vgts, Gts* gts){
   the_vgts->size++;
 }
 
+void set_vgts_chunk_patterns(Vgts* the_vgts, Vlong* m_indices, long n_chunks, long k){
+  for(int i=0; i<the_vgts->size; i++){
+    set_gts_chunk_patterns(the_vgts->a[i], m_indices, n_chunks, k);
+  }
+}
+
+void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the_cpi){
+  for(int i_gts=0; i_gts<the_vgts->size; i_gts++){
+    Gts* the_gts = the_vgts->a[i_gts];
+    Vlong* the_chunk_patterns = the_gts->chunk_patterns;
+    //    printf("i_gts %d  chunk_patterns size: %ld\n", i_gts, the_chunk_patterns->size);
+    for(long i_chunk=0; i_chunk<the_chunk_patterns->size; i_chunk++){
+      long the_pat = the_chunk_patterns->a[i_chunk];
+      if(the_pat >= 0){
+      Vlong* the_accidxs = the_cpi->a[i_chunk]->a[the_pat];
+      //    printf("i_chunk: %ld  the_accidxs cap: %ld \n", i_chunk, the_accidxs->capacity);
+      //     printf("the_gts->index: %ld\n", the_gts->index);
+      add_long_to_vlong(the_accidxs, the_gts->index);
+      }
+    }
+  }
+}
+
 void print_vgts(Vgts* the_vgts){
   for(int i=0; i<the_vgts->size; i++){
     print_gts(the_vgts->a[i]);
   }
+}
+
+
+// *****  Pattern_ids; indices are patterns; elements are Vlong* of accids having that pattern.
+
+Pattern_ids* construct_pattern_ids(long n_patterns){ // needed size known at construct time, so one param for both cap and size
+  Pattern_ids* pat_ids = (Pattern_ids*)malloc(1*sizeof(Pattern_ids));
+  pat_ids->capacity = n_patterns;
+  pat_ids->size = n_patterns;
+  pat_ids->a = (Vlong**)malloc(n_patterns*sizeof(Vlong*));
+  for(int i=0; i< pat_ids->size; i++){
+    pat_ids->a[i] = construct_vlong(8); // waste of memory? set to NULL until needed?
+  }
+  return pat_ids;
+}
+
+// *****  Chunk_pattern_ids; indices are chunk numbers; elements are Pattern_ids*
+
+Chunk_pattern_ids* construct_chunk_pattern_ids(long n_chunks, long n_patterns){ // needed size known at construct time, so one param for both cap and size
+  Chunk_pattern_ids* chunk_pat_ids = (Chunk_pattern_ids*)malloc(1*sizeof(Chunk_pattern_ids));
+  chunk_pat_ids->capacity = n_chunks;
+  chunk_pat_ids->size = n_chunks;
+  chunk_pat_ids->a = (Pattern_ids**)malloc(n_chunks*sizeof(Pattern_ids*));
+  for(int i=0; i< chunk_pat_ids->size; i++){
+    chunk_pat_ids->a[i] = construct_pattern_ids(n_patterns);
+  }
+  return chunk_pat_ids;
+}
+
+void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi){
+  for(long i=0; i<the_cpi->size; i++){
+    Pattern_ids* the_pi = the_cpi->a[i];
+    for(long p=0; p<the_pi->size; p++){
+      Vlong* the_idxs = the_pi->a[p];
+      if(the_idxs->size > 0){
+      for(long ii=0; ii<the_idxs->size; ii++){
+	printf("%ld %ld ", p, the_idxs->a[ii]);
+      }
+      printf("\n");
+      }
+    }
+  }
+}
+
+// *****  Gts and Chunk_pattern_ids  ***********
+
+Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
+  Vlong* chunk_pats = the_gts->chunk_patterns;
+  Vlong* accidx_matchcounts = construct_vlong(n_accessions);
+  printf("n chunks: %ld\n", chunk_pats->size);
+  for(long i_chunk=0; i_chunk < chunk_pats->size; i_chunk++){
+    long the_pat = chunk_pats->a[i_chunk];
+    //   printf("i_chunk: %ld  the_pat: %ld\n", i_chunk, the_pat);
+    if(the_pat >= 0){
+    Vlong* kmer_match_idxs = the_cpi->a[i_chunk]->a[the_pat];
+    for(long i=0; i<kmer_match_idxs->size; i++){
+      long accidx = kmer_match_idxs->a[i]; // index of one of the accessions matching on this chunk
+      accidx_matchcounts->a[accidx]++;
+    }
+    }
+  }
+  return accidx_matchcounts; 
 }
 
 
@@ -166,6 +293,9 @@ main(int argc, char *argv[])
   ssize_t nread;
   long max_number_of_accessions = 1000000;
 
+  long n_chunks = 32;
+  long kmer_size = 5;
+
   if (argc != 2) {
     fprintf(stderr, "Usage: %s <file>\n", argv[0]);
     exit(EXIT_FAILURE);
@@ -178,7 +308,7 @@ main(int argc, char *argv[])
   }
 
   // *****  read first line 'MARKER followed by marker ids  *****
-  nread = getline(&line, &len, stream); // read first line. 
+  nread = getline(&line, &len, stream); // read first line. should have 'MARKER' and marker ids. 
   char mrkr[64];
   sscanf(line, "%s", mrkr);
   if(strcmp(mrkr, "MARKER") !=0){
@@ -188,39 +318,100 @@ main(int argc, char *argv[])
   
   // ***** read rest of file and store genotype sets and ids in Gts objs.  *****
   int init_vgts_size = 50; // 
-  Vgts* the_vgts = construct_vgts(init_vgts_size); 
+  Vgts* the_vgts = construct_vgts(init_vgts_size);
 
+  long n_markers;
   int gtsets_count = 0;
-  while ((nread = getline(&line, &len, stream)) != -1) {
+  if((nread = getline(&line, &len, stream)) == -1) exit(EXIT_FAILURE); // process first line with genotypes
     char* id = (char*)malloc(100*sizeof(char));
     char* gts = (char*)malloc(nread*sizeof(char)); 
     sscanf(line, "%s %s", id, gts);
     Gts* the_gts = construct_gts(gtsets_count, gts);
-
+    n_markers = strlen(gts); 
     add_gts_to_vgts(the_vgts, the_gts);
-    
+    gtsets_count++;
+  
+  while ((nread = getline(&line, &len, stream)) != -1) {
+    char* id = (char*)malloc(100*sizeof(char));
+    char* gts = (char*)malloc(nread*sizeof(char)); 
+    sscanf(line, "%s %s", id, gts);
+    if(strlen(gts) != n_markers) exit(EXIT_FAILURE); // check number of genotypes is same.
+    Gts* the_gts = construct_gts(gtsets_count, gts);
+    add_gts_to_vgts(the_vgts, the_gts);
     gtsets_count++;
     if(gtsets_count >= max_number_of_accessions) break;
   }
+    print_vgts(the_vgts);
   printf("number of genotype sets stored: %d\n", gtsets_count);
-  printf("the_vstr size: %ld\n", the_vgts->size);
+  printf("the_vgts size: %ld\n", the_vgts->size);
+  printf("n_markers: %ld\n", n_markers);
   // construct_vlong_whole_numbers(
- 
-  print_vgts(the_vgts);
-  
 
-  printf("%ld \n", (long)RAND_MAX);
+  Vlong* marker_indices = construct_vlong_whole_numbers(n_markers);  // shuffled(n_markers);
+  shuffle_vlong(marker_indices);
+
+  // void set_vgts_chunk_patterns(Vgts* the_vgts, Vlong* m_indices, long n_chunks, long k){
+  set_vgts_chunk_patterns(the_vgts, marker_indices, n_chunks, kmer_size);
+
+  printf("after set_vgts_chunk_patterns\n");
+  
+  long n_patterns = get_power(3, kmer_size); // get 3^kmer_size using integer math.
+  printf("n_patterns %ld\n", n_patterns);
+  Chunk_pattern_ids* the_cpi = construct_chunk_pattern_ids(n_chunks, n_patterns);
+  printf("after construct_chunk_pattern_ids\n");
+  
+  populate_chunk_pattern_ids_from_vgts(the_vgts, the_cpi);
+
+  print_chunk_pattern_ids(the_cpi);
+  printf("after populate_...\n");
+
+  for(long iii=0; iii< the_vgts->size; iii++){
+  Gts* a_gts = the_vgts->a[iii];
+  // Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
+  Vlong* kmcs = find_kmer_match_counts(a_gts, the_cpi, the_vgts->size);
+  printf("after find_kmer_...\n");
+  for(long i=0; i<the_vgts->size; i++){
+    if(kmcs->a[i] > 0){
+      printf("accidx: %ld  match counts: %ld \n", i, kmcs->a[i]);
+    }
+  }
+  }
   
   fclose(stream);
   exit(EXIT_SUCCESS);
 }
+  
 
 
-//char* get_nonwhitespace_string(FILE* stream){
-//  char* s = (char*)malloc(50*sizeof(char));
-  
-  
+
+
+
+
+
+
+
+
+
 // *********************************************
+
+long get_power(long base, long power){ // calculate base^power using integer math.
+  long result = 1;
+  for(int i=0; i<power; i++){
+    result *= base;
+  }
+  return result;
+}
+  
+
+
+
+
+
+
+
+
+
+
 
 long* shuffled(int n){ // return an n-element array with number 0 through n-1 in random order.
   
