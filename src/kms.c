@@ -5,6 +5,8 @@
 #include <string.h>
 #include <regex.h>
 
+long do_dbl_md_chunk_counts = 1;
+
 //***********************************************************************************************
 // **************  typedefs  ********************************************************************
 typedef struct{
@@ -104,8 +106,8 @@ main(int argc, char *argv[])
   ssize_t nread;
   long max_number_of_accessions = 1000000;
 
-  long n_chunks = 1250;
-  long kmer_size = 4;
+  long n_chunks = 1000;
+  long kmer_size = 5;
 
   /* for(long i=0; i<27; i++){ */
   /*   char* strpat = ipat_to_strpat(kmer_size, i); */
@@ -205,6 +207,7 @@ main(int argc, char *argv[])
   
   for(long i_query=0; i_query< the_vgts->size; i_query++){
     Gts* q_gts = the_vgts->a[i_query];
+    long q_md_gt_count = q_gts->missing_count;
     long q_md_chunk_count = q_gts->md_chunk_count;
     // Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
     Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
@@ -213,24 +216,47 @@ main(int argc, char *argv[])
     //   printf("%ld\n", i_query);
     for(long i_match=i_query; i_match<the_vgts->size; i_match++){
       Gts* match_gts = the_vgts->a[i_match];
-      //  long missing_count = the_vgts->a[i]->missing_count;
-      long m_md_chunk_count = match_gts->md_chunk_count;
-      long dbl_md_count = accidx_dblmdcounts->a[i_match];
-      long usable_chunk_count = n_chunks - (q_md_chunk_count + m_md_chunk_count - dbl_md_count); // number of chunks with no missing data in either query or match
-      //   if(q_gts->missing_count > missing_count) missing_count = q_gts->missing_count; // use max of missing data in query and match as denom
-      //   double n_usable_chunks_expected = n_chunks*pow((1.0 - (double)missing_count/(double)n_markers), kmer_size);
-      double agmr_cutoff = 1;
       long matching_chunk_count = kmer_match_counts->a[i_match];
-      double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
-      double agmr_est = 1.0 - pow(xxx, 1.0/kmer_size);
+      long match_md_gt_count = match_gts->missing_count;
+      long match_md_chunk_count = match_gts->md_chunk_count;
+
+      // using estimated number of usable chunks
+      long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
+      // sqrt(pow(q_md_gt_count, 2) + pow(match_md_gt_count, 2));
+      double est_usable_chunk_count =
+	n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), kmer_size);
+      double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+      double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/kmer_size);
+      
+      // using correct number of usable pairs (if was calculated)
+      double matching_chunk_fraction = est_matching_chunk_fraction;
+      long usable_chunk_count = est_usable_chunk_count;
+      if(do_dbl_md_chunk_counts){
+	long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
+	usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
+	matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+      }
+      double est_agmr_2 = 1.0 - pow(matching_chunk_fraction, 1.0/kmer_size);
+      
+   
+
+      /* long est_ok_gt_count = n_markers - (q_md_gt_count + match_md_gt_count - (double)(q_md_gt_count*match_md_gt_count)/(double)n_markers); */
+      /* double est_usable_chunk_count_2 = n_chunks*pow( (double)est_ok_gt_count/(double)n_markers, kmer_size ); */
+      /* // n_chunks - (q_md_chunk_count + match_md_chunk_count - (double)(q_md_chunk_count*match_md_chunk_count)/(double)n_chunks); */
+	 
+      //  usable_chunk_count = est_usable_chunk_count;
+      //  double agmr_cutoff = 1;
+     
+      //   double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+      //   double agmr_est = 1.0 - pow(xxx, 1.0/kmer_size);
       if(usable_chunk_count > 100  &&  matching_chunk_count > 0.3*usable_chunk_count){
 	// if(agmr_est < agmr_cutoff){
 	//	  printf("   matchidx: %ld  match counts: %ld \n", i, kmer_match_counts->a[i]);
-	fprintf(stderr, "%ld %ld   %9.6f  %9.6f  %9.6f  %ld %ld  %ld %ld %ld\n",
-		i_query, i_match,
-		xxx, agmr_est, agmr(q_gts, match_gts),
-		matching_chunk_count, usable_chunk_count,
-		q_md_chunk_count, m_md_chunk_count, dbl_md_count);
+	fprintf(stderr, "%ld %ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n",
+		i_query, i_match, matching_chunk_count, 
+		est_matching_chunk_fraction, est_agmr_1,
+		matching_chunk_fraction, est_agmr_2,
+		agmr(q_gts, match_gts));
       }
     }
   }
@@ -555,6 +581,7 @@ Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_a
       /* printf("accidx: %ld  i_chunk: %ld  the_pat: %ld n_patterns %ld\n", the_gts->index, i_chunk, the_pat, n_patterns); */
       /* char achar = getchar(); */
       //  printf("Xnumber of missing data accs, this chunk: %ld \n", chunk_match_idxs->size);
+      if(! do_dbl_md_chunk_counts) continue; // control whether to do the double missing data chunks.
       for(long i=0; i<chunk_match_idxs->size; i++){
 	long accidx = chunk_match_idxs->a[i]; // index of one of the accessions matching on this chunk
 	//	printf("accidx %ld    i: %ld  accidx: %ld \n", accidx, i, accidx);
