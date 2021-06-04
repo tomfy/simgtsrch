@@ -23,6 +23,8 @@ typedef struct{ // genotype set
   long index;
   char* gtset;
   Vlong* chunk_patterns;
+  long md_chunk_count; // number of chunks with missing data (in at least one gt)
+  long missing_count; // number of gts with missing data.
 } Gts;
 
 typedef struct{
@@ -40,6 +42,7 @@ typedef struct{
 typedef struct{
   long capacity;
   long size;
+  long n_patterns;
   Pattern_ids** a; // array Pattern_ids
 } Chunk_pattern_ids;
 
@@ -48,6 +51,7 @@ typedef struct{
 long int_power(long base, long power);
 char* ipat_to_strpat(long len, long ipat);
 long strpat_to_ipat(long len, char* strpat);
+double agmr(Gts* gts1, Gts* gts2);
 
 // ***** Vlong **********************************************************************************
 Vlong* construct_vlong(long cap); // capacity = cap, size = 0
@@ -61,7 +65,7 @@ void add_string_to_vstr(Vstr* the_vstr, char* str);
 
 // *****  Gts  **********************************************************************************
 Gts* construct_gts(long index, char* gtset);
-void set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k);
+long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k);
 char* print_gts(Gts* the_gts);
 
 // *****  Vgts  *********************************************************************************
@@ -80,7 +84,7 @@ Chunk_pattern_ids* construct_chunk_pattern_ids(long n_chunks, long n_patterns);
 void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi);
 
 // *****  Gts and Chunk_pattern_ids  ***********
-Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions);
+Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_doublemissingdatacounts);
 
 // *************************  end of declarations  **********************************************
 
@@ -100,8 +104,8 @@ main(int argc, char *argv[])
   ssize_t nread;
   long max_number_of_accessions = 1000000;
 
-  long n_chunks = 1000;
-  long kmer_size = 5;
+  long n_chunks = 1250;
+  long kmer_size = 4;
 
   /* for(long i=0; i<27; i++){ */
   /*   char* strpat = ipat_to_strpat(kmer_size, i); */
@@ -197,19 +201,36 @@ main(int argc, char *argv[])
   //  print_chunk_pattern_ids(the_cpi);
   printf("after populate_...\n");
  
-
   printf("the_vgts->size: %ld\n", the_vgts->size);
+  
   for(long i_query=0; i_query< the_vgts->size; i_query++){
     Gts* q_gts = the_vgts->a[i_query];
+    long q_md_chunk_count = q_gts->md_chunk_count;
     // Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
-    Vlong* kmer_match_counts = find_kmer_match_counts(q_gts, the_cpi, the_vgts->size);
+    Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
+    Vlong* kmer_match_counts = find_kmer_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
     //  printf("after find_kmer_...\n");
-      printf("query accession number: %ld\n", i_query);
-    for(long i=i_query; i<the_vgts->size; i++){  
-      if(kmer_match_counts->a[i] > 0){
-	if(kmer_match_counts->a[i] > n_chunks/5){
-	  printf("   matchidx: %ld  match counts: %ld \n", i, kmer_match_counts->a[i]);
-	}
+    //   printf("%ld\n", i_query);
+    for(long i_match=i_query; i_match<the_vgts->size; i_match++){
+      Gts* match_gts = the_vgts->a[i_match];
+      //  long missing_count = the_vgts->a[i]->missing_count;
+      long m_md_chunk_count = match_gts->md_chunk_count;
+      long dbl_md_count = accidx_dblmdcounts->a[i_match];
+      long usable_chunk_count = n_chunks - (q_md_chunk_count + m_md_chunk_count - dbl_md_count); // number of chunks with no missing data in either query or match
+      //   if(q_gts->missing_count > missing_count) missing_count = q_gts->missing_count; // use max of missing data in query and match as denom
+      //   double n_usable_chunks_expected = n_chunks*pow((1.0 - (double)missing_count/(double)n_markers), kmer_size);
+      double agmr_cutoff = 1;
+      long matching_chunk_count = kmer_match_counts->a[i_match];
+      double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+      double agmr_est = 1.0 - pow(xxx, 1.0/kmer_size);
+      if(usable_chunk_count > 100  &&  matching_chunk_count > 0.3*usable_chunk_count){
+	// if(agmr_est < agmr_cutoff){
+	//	  printf("   matchidx: %ld  match counts: %ld \n", i, kmer_match_counts->a[i]);
+	fprintf(stderr, "%ld %ld   %9.6f  %9.6f  %9.6f  %ld %ld  %ld %ld %ld\n",
+		i_query, i_match,
+		xxx, agmr_est, agmr(q_gts, match_gts),
+		matching_chunk_count, usable_chunk_count,
+		q_md_chunk_count, m_md_chunk_count, dbl_md_count);
       }
     }
   }
@@ -219,6 +240,7 @@ main(int argc, char *argv[])
 }
   
 // **********************  end of main  *********************************************************
+
 
 
 // *******************  function definitions  ***************************************************
@@ -304,49 +326,60 @@ Gts* construct_gts(long index, char* gtset){
   the_gts->index = index;
   the_gts->gtset = gtset;
   the_gts->chunk_patterns = NULL;
+  the_gts->md_chunk_count = 0;
+  long missing_count = 0;
   // printf("in construct_gts. index: %ld  gtset: %s \n", the_gts->index, the_gts->gtset);
+  for(long i=0; ; i++){
+    char a = the_gts->gtset[i];
+    if(a == '\0') break;
+    if((a == '0') || (a == '1') || (a == '2')){
+      // do nothing
+    }else{
+      missing_count++;
+    }
+  }
+  the_gts->missing_count = missing_count;
+  //  printf("In construct_gts. missing_count: %ld \n", the_gts->missing_count);
   return the_gts;
 }
 
-void set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k){
+long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long k){
   //  printf("top of set_gts_chunk_patterns. n_chunks: %ld  k: %ld  gts index: %ld\n", n_chunks, k, the_gts->index);
- 
+  long gts_mdchunk_count = 0;
+  long n_patterns = int_power(3, k); // 3^k, the number of valid patterns, also there is a 'pattern' for missing data, making 3^k + 1 in all
   Vlong* chunk_pats = construct_vlong(n_chunks); // (Vlong*)malloc(n_chunks*sizeof(Vlong));
   //  printf("after construct_vlong chunk_pats; n_chunks: %ld\n", n_chunks);
   //  printf("m_indices->a[0]: %ld \n", m_indices->a[0]);
   // printf("gtsidx: %ld  gtset: %s\n", the_gts->index, the_gts->gtset);
   for(long i_chunk=0; i_chunk < n_chunks; i_chunk++){
     long i_chunkstart = k*i_chunk;
-    long pat = 0;
+    long i_pat = 0;
     long f = 1;
-    char* sss = (char*)calloc(k+1,sizeof(char));
-    sss[k] = '\0';
-    for(long j=0; j < k; j++){
-      //  printf("i_chunkstart: %ld  j: %ld m_indices->size: %ld\n", i_chunkstart, j, m_indices->size);
+
+    // loop over characters in the chunk and construct an corresponding long index, in range [0..3^k] (3^k is the index for a chunk with any missing data)
+    for(long j=0; j < k; j++){ 
       long idx = m_indices->a[i_chunkstart + j]; // 
-      //   printf("i_chunk: %ld ; j: %ld ; idx: %ld  size of gtset:  %ld\n", i_chunk, j, idx, (long)strlen(the_gts->gtset));
-      
       char a = the_gts->gtset[idx];
-      sss[j] = a;
       long l = (long)a - 48;
-     
-      if((l>=0) && (l<=2)){
-	pat += f*l;
-	f*=3;
-      }else{
-	pat = -1;
-	sss = "XXX";
+      if((l>=0) && (l<=2)){ // this char is ok (0, 1, or 2, not missing data)
+	i_pat += f*l;
+	f *=3;
+      }else{ // missing data in (at least) one of the chunks
+	i_pat = n_patterns;
+	gts_mdchunk_count++;
 	break;
       }
-    }
+    } // loop over the k chars in a chunk.
     //  printf("the_gts->index: %ld   sss: [%s]   ", the_gts->index, sss);
     //  printf("[%s] %ld  [%s]\n", sss, pat, ipat_to_strpat(k, pat));
     //   printf("gts index: %ld  chunk: %ld  pat: %ld \n", the_gts->index, i_chunk, pat);
-    add_long_to_vlong(chunk_pats, pat);
+    add_long_to_vlong(chunk_pats, i_pat);
     // printf("after add_long_to_vlong\n");
-  }
+  } // loop over chunks.
   the_gts->chunk_patterns = chunk_pats;
-  // printf("the_gts->index: %ld\n", the_gts->index);
+  the_gts->md_chunk_count = gts_mdchunk_count;
+  printf("the_gts->index: %ld  %ld\n", the_gts->index, the_gts->md_chunk_count);
+  return gts_mdchunk_count;
 }
 
 char* print_gts(Gts* the_gts){
@@ -379,25 +412,37 @@ void add_gts_to_vgts(Vgts* the_vgts, Gts* gts){
 }
 
 void set_vgts_chunk_patterns(Vgts* the_vgts, Vlong* m_indices, long n_chunks, long k){
- 
-    // printf("In set_vgts_chunk_patterns. before gts %ld  %ld\n", i, the_vgts->a[i]->index);
+  long total_mdchunk_count = 0;
+  // printf("In set_vgts_chunk_patterns. before gts %ld  %ld\n", i, the_vgts->a[i]->index);
   for(long i=0; i < the_vgts->size; i++){
-    set_gts_chunk_patterns(the_vgts->a[i], m_indices, n_chunks, k);
+    long mdchcount = set_gts_chunk_patterns(the_vgts->a[i], m_indices, n_chunks, k);
+    total_mdchunk_count += mdchcount;
     /* for(long iiii=0; iiii<the_vgts->size; iiii++){ */
     /*   Gts* a_gts = the_vgts->a[iiii]; */
     /*   printf("after set_vgts... iiii: %ld  a_gts->index: %ld\n", iiii, a_gts->index); */
     /* } */
     // printf("In set_vgts_chunk_patterns. after gts %ld  %ld\n", i, the_vgts->a[i]->index);
+    //    printf("gts idx: %ld  mdchunk_count: this gts: %ld  cumesofar %ld \n", i, mdchcount, total_mdchunk_count);
   }
 }
 
 void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the_cpi){
+  long n_patterns = the_cpi->n_patterns;
   for(long i_gts=0; i_gts<the_vgts->size; i_gts++){
     Gts* the_gts = the_vgts->a[i_gts];
-    Vlong* the_chunk_patterns = the_gts->chunk_patterns;
+    Vlong* the_chunk_patterns = the_gts->chunk_patterns; // the gt patterns (longs) occurring in each chunk of this gts 
     //     printf("i_gts %ld  chunk_patterns size: %ld\n", i_gts, the_chunk_patterns->size);
+    long mdcount = 0;
+    for(long i=0; i<the_chunk_patterns->size; i++){
+      if(the_chunk_patterns->a[i] == n_patterns){ mdcount++; }
+    }
+    //  printf("accidx: %ld  mdcount %ld \n", the_gts->index, mdcount);
+    
     for(long i_chunk=0; i_chunk<the_chunk_patterns->size; i_chunk++){
       long the_pat = the_chunk_patterns->a[i_chunk];
+      /* if(the_pat == n_patterns){ */
+      /* 	printf("the_pat: %ld  i_chunk %ld  accidx: %ld\n", the_pat, i_chunk, i_gts);  */
+      /* } */
       if(the_pat >= 0){
 	Vlong* the_accidxs = the_cpi->a[i_chunk]->a[the_pat];
 	/* printf("i_gts: %ld i_chunk: %ld  the_pat: %ld      the_accidxs cap: %ld \n", */
@@ -408,10 +453,23 @@ void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the
 	}
 	add_long_to_vlong(the_accidxs, the_gts->index);
       }else{
-	// printf("negative pat: %ld \n", the_pat);
+	printf("negative pat: %ld \n", the_pat);
+	exit(EXIT_FAILURE);
       }
     }
   }
+
+  long total_mdchunk_count = 0;
+  for(long i=0; i<the_cpi->size; i++){
+    long chunk_md_count = the_cpi->a[i]->a[n_patterns]->size;
+    total_mdchunk_count += chunk_md_count;
+    //   printf("Anumber of missingdata accs for chunk %ld   is  %ld; totalsofar: %ld\n", i, chunk_md_count, total_mdchunk_count);
+  }
+  printf("bottom of populate. total_mdchunk_count: %ld\n", total_mdchunk_count);
+  /* for(long i=0; i<the_cpi->size; i++){ */
+  /*   printf("number of missingdata accs for chunk %ld   is  %ld\n", i, the_cpi->a[i]->a[n_patterns]->size); */
+  /* } */
+  // exit(1);
 }
 
 void print_vgts(Vgts* the_vgts){
@@ -435,9 +493,9 @@ void check_gts_indices(Vgts* the_vgts){
 
 Pattern_ids* construct_pattern_ids(long n_patterns){ // needed size known at construct time, so one param for both cap and size
   Pattern_ids* pat_ids = (Pattern_ids*)malloc(1*sizeof(Pattern_ids));
-  pat_ids->capacity = n_patterns;
-  pat_ids->size = n_patterns;
-  pat_ids->a = (Vlong**)malloc(n_patterns*sizeof(Vlong*));
+  pat_ids->capacity = n_patterns+1; // 0..n_patterns-1 are the indices of the n_patterns (=3^k) good patterns, and index n_pattern is for the missing data case.
+  pat_ids->size = n_patterns+1;
+  pat_ids->a = (Vlong**)malloc((n_patterns+1)*sizeof(Vlong*));
   for(int i=0; i< pat_ids->size; i++){
     pat_ids->a[i] = construct_vlong(8); // waste of memory? set to NULL until needed?
   }
@@ -450,6 +508,7 @@ Chunk_pattern_ids* construct_chunk_pattern_ids(long n_chunks, long n_patterns){ 
   Chunk_pattern_ids* chunk_pat_ids = (Chunk_pattern_ids*)malloc(1*sizeof(Chunk_pattern_ids));
   chunk_pat_ids->capacity = n_chunks;
   chunk_pat_ids->size = n_chunks;
+  chunk_pat_ids->n_patterns = n_patterns;
   chunk_pat_ids->a = (Pattern_ids**)malloc(n_chunks*sizeof(Pattern_ids*));
   for(int i=0; i< chunk_pat_ids->size; i++){
     chunk_pat_ids->a[i] = construct_pattern_ids(n_patterns);
@@ -480,21 +539,40 @@ void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi){
 
 // *****  Gts and Chunk_pattern_ids  ***********
  
-Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
+Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_dbl_md_counts){
+  long n_patterns = the_cpi->n_patterns;
   Vlong* chunk_pats = the_gts->chunk_patterns;
   Vlong* accidx_matchcounts = construct_vlong(n_accessions);
+  // Vlong*
+ 
   // printf("n chunks: %ld\n", chunk_pats->size);
   for(long i_chunk=0; i_chunk < chunk_pats->size; i_chunk++){
     long the_pat = chunk_pats->a[i_chunk];
     //   printf("i_chunk: %ld  the_pat: %ld\n", i_chunk, the_pat);
-    if(the_pat >= 0){
-      Vlong* kmer_match_idxs = the_cpi->a[i_chunk]->a[the_pat];
-      for(long i=0; i<kmer_match_idxs->size; i++){
-	long accidx = kmer_match_idxs->a[i]; // index of one of the accessions matching on this chunk
+  
+    Vlong* chunk_match_idxs = the_cpi->a[i_chunk]->a[the_pat]; // array of indices of the matches to this chunk & pat
+    if(the_pat == n_patterns){ // missing data in this chunk
+      /* printf("accidx: %ld  i_chunk: %ld  the_pat: %ld n_patterns %ld\n", the_gts->index, i_chunk, the_pat, n_patterns); */
+      /* char achar = getchar(); */
+      //  printf("Xnumber of missing data accs, this chunk: %ld \n", chunk_match_idxs->size);
+      for(long i=0; i<chunk_match_idxs->size; i++){
+	long accidx = chunk_match_idxs->a[i]; // index of one of the accessions matching on this chunk
+	//	printf("accidx %ld    i: %ld  accidx: %ld \n", accidx, i, accidx);
+	accidx_dbl_md_counts->a[accidx]++;
+      }
+    }else{ // the_pat = 0..n_patterns-1 (good data)
+      for(long i=0; i<chunk_match_idxs->size; i++){
+	long accidx = chunk_match_idxs->a[i]; // index of one of the accessions matching on this chunk
 	accidx_matchcounts->a[accidx]++;
       }
     }
   }
+  /* printf("query: %ld\n", the_gts->index); */
+  /* printf("%ld %ld\n", accidx_dbl_md_counts->size, accidx_matchcounts->size); */
+  /* for(long i=0; i< accidx_dbl_md_counts->size; i++){ */
+  /*   printf("  ABC  %ld   %ld \n", i, accidx_matchcounts->a[i]); */
+  /*   printf("    DEF  %ld %ld \n", i, accidx_dbl_md_counts->a[i]); */
+  /* } */
   return accidx_matchcounts; 
 }
 
@@ -526,22 +604,42 @@ char* ipat_to_strpat(long k, long ipat){
 
 long strpat_to_ipat(long len, char* strpat){
   long pat = 0;
-    long f = 1;
-    for(long j=0; j < len; j++){
-      //  printf("i_chunkstart: %ld  j: %ld m_indices->size: %ld\n", i_chunkstart, j, m_indices->size);
-      //long idx = m_indices->a[i_chunkstart + j];
-      //   printf("i_chunk: %ld ; j: %ld ; idx: %ld  size of gtset:  %ld\n", i_chunk, j, idx, (long)strlen(the_gts->gtset));
+  long f = 1;
+  for(long j=0; j < len; j++){
+    //  printf("i_chunkstart: %ld  j: %ld m_indices->size: %ld\n", i_chunkstart, j, m_indices->size);
+    //long idx = m_indices->a[i_chunkstart + j];
+    //   printf("i_chunk: %ld ; j: %ld ; idx: %ld  size of gtset:  %ld\n", i_chunk, j, idx, (long)strlen(the_gts->gtset));
       
-      char a = strpat[j] - 48;
-      if((a>=0) && (a<=2)){
-	pat += f*a;
-	f*=3;
-      }else{
-	pat = -1;
-	break;
+    char a = strpat[j] - 48;
+    if((a>=0) && (a<=2)){
+      pat += f*a;
+      f*=3;
+    }else{
+      pat = -1;
+      break;
+    }
+  }
+  return pat;
+}
+
+double agmr(Gts* gtset1, Gts* gtset2){
+  char* gts1 = gtset1->gtset;
+  char* gts2 = gtset2->gtset;
+  long usable_pair_count = 0;
+  long mismatches = 0;
+  for(long i=0; ;i++){
+    char a1 = gts1[i];
+    if(a1 == '\0') break;
+    char a2 = gts2[i];
+    if(a2 == '\0') break;
+    if((a1 == '0') || (a1 == '1') || (a1 == '2')){
+      if((a2 == '0') || (a2 == '1') || (a2 == '2')){
+	usable_pair_count++;
+	if(a1 != a2) mismatches++;
       }
     }
-    return pat;
+  }
+  return (usable_pair_count > 0)? (double)mismatches/(double)usable_pair_count : -1;
 }
   
 
