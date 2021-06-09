@@ -6,7 +6,6 @@
 #include <time.h>
 #include <ctype.h>
 #include <unistd.h>
-// #include <regex.h>
 
 long do_dbl_md_chunk_counts = 0;
 
@@ -54,7 +53,7 @@ typedef struct{
 typedef struct{
   long query_index;
   long match_index;
-  //  long n_matching_chunks;
+  long n_matching_chunks;
   //  long est_usable_chunk_count;
   //  long usable_chunk_count;
   double est_matching_chunk_fraction;
@@ -101,8 +100,8 @@ void print_vgts(Vgts* the_vgts);
 void check_gts_indices(Vgts* the_vgts);
 
 // *****  Mci  ********
-Mci* construct_mci(long qidx, long midx,
-		   //		   long n_matching_chunks, long est_n_usable_chunks, long n_usable_chunks);
+Mci* construct_mci(long qidx, long midx, long n_matching_chunks,
+		   // long est_n_usable_chunks, long n_usable_chunks);
 		   double est_matching_chunk_fraction, double matching_chunk_fraction);
 // *****  Vmci  *********************************************************************************
 Vmci* construct_vmci(long init_size);
@@ -198,9 +197,9 @@ main(int argc, char *argv[])
   /* } */
   //return 0;
 
-   if(input_filename == NULL){
+  if(input_filename == NULL){
     perror("must specify input filename: -i <filename>");
-   exit(EXIT_FAILURE);
+    exit(EXIT_FAILURE);
   }
 
   printf("input file: %s  n_chunks: %ld  chunk size: %ld  get exact md chunk counts?: %ld \n",
@@ -238,13 +237,13 @@ main(int argc, char *argv[])
 
   long n_markers;
   long gtsets_count = 0;
-   Vstr* accession_ids = construct_vstr(100);
+  Vstr* accession_ids = construct_vstr(100);
 
   if((nread = getline(&line, &len, stream)) != -1){ // process first line with genotypes 
     char* id = (char*)malloc(100*sizeof(char));
     char* gtstr = (char*)malloc(nread*sizeof(char)); 
     sscanf(line, "%s %s", id, gtstr);
-      add_string_to_vstr(accession_ids, id);
+    add_string_to_vstr(accession_ids, id);
     Gts* the_gts = construct_gts(gtsets_count, gtstr);
     n_markers = strlen(gtstr); 
     add_gts_to_vgts(the_vgts, the_gts);
@@ -294,8 +293,8 @@ main(int argc, char *argv[])
   printf("time to construct chunk_pattern_ids data structure: %12.6f\n", hi_res_time() - start);
 
   start = hi_res_time();
-  // getchar();
   if(0){
+    long true_agmr_count = 0;
     for(long i_query=0; i_query< the_vgts->size; i_query++){
       Gts* q_gts = the_vgts->a[i_query];
       long q_md_gt_count = q_gts->missing_count;
@@ -303,8 +302,6 @@ main(int argc, char *argv[])
 
       Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
       Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
-      //  printf("after find_kmer_...\n");
-      //   printf("%ld\n", i_query);
       for(long i_match=i_query; i_match<the_vgts->size; i_match++){
 	Gts* match_gts = the_vgts->a[i_match];
 	long matching_chunk_count = chunk_match_counts->a[i_match];
@@ -313,47 +310,32 @@ main(int argc, char *argv[])
 
 	// using estimated number of usable chunks
 	long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
-	// sqrt(pow(q_md_gt_count, 2) + pow(match_md_gt_count, 2));
 	double est_usable_chunk_count =
 	  n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), chunk_size);
-	double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
-	double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/chunk_size);
-      
+
 	// using correct number of usable pairs (if was calculated)
-	double matching_chunk_fraction = est_matching_chunk_fraction;
 	long usable_chunk_count = est_usable_chunk_count;
 	if(do_dbl_md_chunk_counts){
 	  long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
 	  usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
-	  matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
 	}
-	double est_agmr_2 = 1.0 - pow(matching_chunk_fraction, 1.0/chunk_size);
       
-   
-
-	/* long est_ok_gt_count = n_markers - (q_md_gt_count + match_md_gt_count - (double)(q_md_gt_count*match_md_gt_count)/(double)n_markers); */
-	/* double est_usable_chunk_count_2 = n_chunks*pow( (double)est_ok_gt_count/(double)n_markers, chunk_size ); */
-	/* // n_chunks - (q_md_chunk_count + match_md_chunk_count - (double)(q_md_chunk_count*match_md_chunk_count)/(double)n_chunks); */
-	 
-	//  usable_chunk_count = est_usable_chunk_count;
-	//  double agmr_cutoff = 1;
-     
-	//   double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
-	//   double agmr_est = 1.0 - pow(xxx, 1.0/chunk_size);
-	if(usable_chunk_count > 50  &&  matching_chunk_count > 0.4*usable_chunk_count){
-	/*   	printf("query: %ld   n good candidates:  %ld \n", i_query, the_vmci->size); */
-	/* query_vmcis[i_query] = the_vmci; */
-	  // if(agmr_est < agmr_cutoff){
-	  //	  printf("   matchidx: %ld  match counts: %ld \n", i, chunk_match_counts->a[i]);
+	if(usable_chunk_count > 50  &&  matching_chunk_count > 0.2*usable_chunk_count){
+	  double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+	  double matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	  double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/chunk_size);
+	  double est_agmr_2 = 1.0 - pow(matching_chunk_fraction, 1.0/chunk_size);	  
 	  fprintf(stderr, "%ld %ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n",
 		  i_query, i_match, matching_chunk_count, 
 		  est_matching_chunk_fraction, est_agmr_1,
 		  matching_chunk_fraction, est_agmr_2,
 		  agmr(q_gts, match_gts));
+	  true_agmr_count++;
 	}
       }
+      // free_vlong(chunk_match_counts);
     }
-    printf("time to find candidate matches and true agmrs: %12.6f\n", hi_res_time() - start);
+    printf("time to find candidate matches and %ld true agmrs: %12.6f\n", true_agmr_count, hi_res_time() - start);
   }else{ // new way - get all good candidates for matches to all queries, and store them. Then 
     Vmci** query_vmcis = (Vmci**)malloc(the_vgts->size * sizeof(Vmci*)); // 
     
@@ -364,7 +346,7 @@ main(int argc, char *argv[])
 
       Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
       Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
-  	Vmci* the_vmci = construct_vmci(20);
+      Vmci* the_vmci = construct_vmci(20);
       for(long i_match=i_query; i_match<the_vgts->size; i_match++){
 
 	Gts* match_gts = the_vgts->a[i_match];
@@ -376,20 +358,21 @@ main(int argc, char *argv[])
 	long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
 	double est_usable_chunk_count =
 	  n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), chunk_size);
-	double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+
 	//   double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/chunk_size);
       
 	// using correct number of usable pairs (if it was calculated)
-	double matching_chunk_fraction = est_matching_chunk_fraction;
 	long usable_chunk_count = est_usable_chunk_count;
 	if(do_dbl_md_chunk_counts){
 	  long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
 	  usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
-	  matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	
 	}
 	//	if(matching_chunk_count > 50) printf("matching chunk count: %ld  usable_chunk_count %ld \n", matching_chunk_count, usable_chunk_count);
 	if(usable_chunk_count > 50  &&  matching_chunk_count > 0.2*usable_chunk_count){
-	  Mci* the_mci = construct_mci(i_query, i_match, est_matching_chunk_fraction, matching_chunk_fraction);
+	  double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+	  double matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	  Mci* the_mci = construct_mci(i_query, i_match, matching_chunk_count, est_matching_chunk_fraction, matching_chunk_fraction);
 	  //est_usable_chunk_count, usable_chunk_count);
 	  add_mci_to_vmci(the_vmci, the_mci);
 	}
@@ -415,8 +398,9 @@ main(int argc, char *argv[])
 	double est_agmr_2 = 1.0 - pow(the_mci->matching_chunk_fraction, 1.0/chunk_size);
 	double true_agmr = agmr(q_gts, match_gts);
 	true_agmr_count++;
-	fprintf(stderr, "%ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n", 
+	fprintf(stderr, "%ld %ld  %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n", 
 		i_q, i_m,
+		the_mci->n_matching_chunks,
 		the_mci->est_matching_chunk_fraction, est_agmr_1,
 		the_mci->matching_chunk_fraction, est_agmr_2,
 		true_agmr
@@ -776,10 +760,11 @@ Vlong* find_chunk_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_
 // ***** Mci  *****
 
 //Mci* construct_mci(long qidx, long midx, long n_matching_chunks, long est_n_usable_chunks, long n_usable_chunks){
-Mci* construct_mci(long qidx, long midx, double est_matching_chunk_fraction, double matching_chunk_fraction){
+Mci* construct_mci(long qidx, long midx, long n_matching_chunks, double est_matching_chunk_fraction, double matching_chunk_fraction){
   Mci* the_mci = (Mci*)malloc(1*sizeof(Mci));
   the_mci->query_index = qidx;
   the_mci->match_index = midx;
+  the_mci->n_matching_chunks = n_matching_chunks;
   the_mci->est_matching_chunk_fraction = est_matching_chunk_fraction;
   the_mci->matching_chunk_fraction = matching_chunk_fraction;
 
