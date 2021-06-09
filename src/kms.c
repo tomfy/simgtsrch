@@ -3,9 +3,12 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
-#include <regex.h>
+#include <time.h>
+#include <ctype.h>
+#include <unistd.h>
+// #include <regex.h>
 
-long do_dbl_md_chunk_counts = 1;
+long do_dbl_md_chunk_counts = 0;
 
 //***********************************************************************************************
 // **************  typedefs  ********************************************************************
@@ -48,18 +51,37 @@ typedef struct{
   Pattern_ids** a; // array Pattern_ids
 } Chunk_pattern_ids;
 
+typedef struct{
+  long query_index;
+  long match_index;
+  //  long n_matching_chunks;
+  //  long est_usable_chunk_count;
+  //  long usable_chunk_count;
+  double est_matching_chunk_fraction;
+  double matching_chunk_fraction;
+} Mci; // 'Mci = Matching chunk info'
+
+typedef struct{
+  long capacity;
+  long size;
+  Mci** a;
+} Vmci; 
+
+
 // *********************** function declarations ************************************************
 
 long int_power(long base, long power);
 char* ipat_to_strpat(long len, long ipat);
 long strpat_to_ipat(long len, char* strpat);
 double agmr(Gts* gts1, Gts* gts2);
+double hi_res_time(void);
 
 // ***** Vlong **********************************************************************************
 Vlong* construct_vlong(long cap); // capacity = cap, size = 0
 Vlong* construct_vlong_whole_numbers(long size); // initialize to 0,1,2,3,...size-1
 void add_long_to_vlong(Vlong* the_vlong, long x);
 void shuffle_vlong(Vlong* the_vlong);
+void free_vlong(Vlong* the_vlong);
 
 // *****  Vstr  *********************************************************************************
 Vstr* construct_vstr(long min_size);
@@ -78,6 +100,14 @@ void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the
 void print_vgts(Vgts* the_vgts);
 void check_gts_indices(Vgts* the_vgts);
 
+// *****  Mci  ********
+Mci* construct_mci(long qidx, long midx,
+		   //		   long n_matching_chunks, long est_n_usable_chunks, long n_usable_chunks);
+		   double est_matching_chunk_fraction, double matching_chunk_fraction);
+// *****  Vmci  *********************************************************************************
+Vmci* construct_vmci(long init_size);
+void add_mci_to_vmci(Vmci* the_vmci, Mci* the_mci); 
+
 // *****  Pattern_ids; indices are patterns; elements are Vlong* of accids having that pattern.
 Pattern_ids* construct_pattern_ids(long n_patterns);
 
@@ -86,7 +116,7 @@ Chunk_pattern_ids* construct_chunk_pattern_ids(long n_chunks, long n_patterns);
 void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi);
 
 // *****  Gts and Chunk_pattern_ids  ***********
-Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_doublemissingdatacounts);
+Vlong* find_chunk_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_doublemissingdatacounts);
 
 // *************************  end of declarations  **********************************************
 
@@ -98,37 +128,102 @@ Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_a
 int
 main(int argc, char *argv[])
 {
-
-  // read in genotype matrix file
-  FILE *stream;
-  char *line = NULL;
-  size_t len = 0;
-  ssize_t nread;
+  long n_chunks = 1000; // number of chunks (default = 1000)
+  long chunk_size = 5; // number of genotype in each chunk (default = 5)
   long max_number_of_accessions = 1000000;
 
-  long n_chunks = 1000;
-  long kmer_size = 5;
-
-  /* for(long i=0; i<27; i++){ */
-  /*   char* strpat = ipat_to_strpat(kmer_size, i); */
-  /*   long ipat = strpat_to_ipat(kmer_size, strpat); */
-  /*   char* strpat2 = ipat_to_strpat(kmer_size, ipat); */
-  /*   printf("%ld  %s  %ld  %s\n", i, strpat, ipat, strpat2); */
-  /* } */
-  /* exit(1); */
   
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+  // ***** process command line *****
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file> options\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
-  stream = fopen(argv[1], "r");
+  printf("argv[1]: [%s] \n", argv[1]);
+  char* input_filename = NULL;
+  FILE *stream = NULL;
+  //  stream = fopen(argv[1], "r");
+    
+  int c;
+  while((c = getopt(argc, argv, "i:n:k:m")) != -1){
+    printf("c: %c %s %d\n", c, optarg, optind);
+    switch(c){
+    case 'i':
+      input_filename = optarg;
+      stream = fopen(input_filename, "r");
+      if(stream == NULL){
+	printf("Failed to open %s for reading.\n", input_filename);
+	exit(EXIT_FAILURE);
+      }
+      break;
+    case 'n':
+      n_chunks = (long)atoi(optarg);
+      if(n_chunks == 0){
+	printf("option n requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }
+      break;
+    case 'k':
+      chunk_size = (long)atoi(optarg);
+      if(chunk_size == 0){
+	printf("option k requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }
+      break;
+    case 'm': // 1 to get exact number of usable chunks
+      do_dbl_md_chunk_counts = 1;
+      break;
+    case '?':
+      printf("? case in command line processing switch.\n");
+      if ((optopt == 'i') || (optopt == 'n') || (optopt == 'k'))
+	fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+      else if (isprint (optopt))
+	fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+      else
+	fprintf (stderr,
+		 "Unknown option character: %d\n",
+		 optopt);
+      exit(EXIT_FAILURE);
+    default:
+      printf("default case (abort)\n");
+      abort ();
+    } // end of switch block
+  } // end of loop over c.l. arguments
+  printf("optind: %d argc: %d\n", optind, argc);
+  if(optind < argc){
+    printf("Non-option arguments. Bye.\n");
+  }
+  /* for (int index = optind; index < argc; index++){ */
+  /*   printf ("Non-option argument %s\n", argv[index]); */
+  /* } */
+  //return 0;
+
+   if(input_filename == NULL){
+    perror("must specify input filename: -i <filename>");
+   exit(EXIT_FAILURE);
+  }
+
+  printf("input file: %s  n_chunks: %ld  chunk size: %ld  get exact md chunk counts?: %ld \n",
+	 input_filename, n_chunks, chunk_size, do_dbl_md_chunk_counts);
+  //exit(1);
+  // *****  done processing command line  *****
+
+  double start;
+  start = hi_res_time();
+  
+  // *****  read in genotype matrix file  *****
+ 
+  char *line = NULL;
+  size_t len = 0;
+  ssize_t nread;
+
+ 
   if (stream == NULL) {
     perror("fopen");
     exit(EXIT_FAILURE);
   }
 
-  // *****  read first line 'MARKER followed by marker ids  *****
+  // *****  read first line: 'MARKER followed by marker ids  *****
   nread = getline(&line, &len, stream); // read first line. should have 'MARKER' and marker ids. 
   char mrkr[64];
   sscanf(line, "%s", mrkr);
@@ -138,128 +233,200 @@ main(int argc, char *argv[])
   } 
   
   // ***** read rest of file and store genotype sets and ids in Gts objs.  *****
-  int init_vgts_size = 50; // 
+  int init_vgts_size = 100; // 
   Vgts* the_vgts = construct_vgts(init_vgts_size);
 
   long n_markers;
   long gtsets_count = 0;
-  if((nread = getline(&line, &len, stream)) == -1) exit(EXIT_FAILURE); // process first line with genotypes
-  char* id = (char*)malloc(100*sizeof(char));
-  char* gtstr = (char*)malloc(nread*sizeof(char)); 
-  sscanf(line, "%s %s", id, gtstr);
-  //  printf("gtsets_count: %ld  id %s;  gtstr: %s\n", gtsets_count, id, gtstr);
-  Gts* the_gts = construct_gts(gtsets_count, gtstr);
-  n_markers = strlen(gtstr); 
-  add_gts_to_vgts(the_vgts, the_gts);
-  gtsets_count++;
-  
+   Vstr* accession_ids = construct_vstr(100);
+
+  if((nread = getline(&line, &len, stream)) != -1){ // process first line with genotypes 
+    char* id = (char*)malloc(100*sizeof(char));
+    char* gtstr = (char*)malloc(nread*sizeof(char)); 
+    sscanf(line, "%s %s", id, gtstr);
+      add_string_to_vstr(accession_ids, id);
+    Gts* the_gts = construct_gts(gtsets_count, gtstr);
+    n_markers = strlen(gtstr); 
+    add_gts_to_vgts(the_vgts, the_gts);
+    gtsets_count++;
+  }else{
+    exit(EXIT_FAILURE);
+  }
+
   while ((nread = getline(&line, &len, stream)) != -1) {
     char* id = (char*)malloc(100*sizeof(char));
     char* gtstr = (char*)malloc(nread*sizeof(char)); 
     sscanf(line, "%s %s", id, gtstr);
-    //  printf("gtsets_count: %ld  id %s;  gtstr: %s\n", gtsets_count, id, gtstr);
+    add_string_to_vstr(accession_ids, id);
     if(strlen(gtstr) != n_markers) exit(EXIT_FAILURE); // check number of genotypes is same.
     Gts* the_gts = construct_gts(gtsets_count, gtstr);
-    //   printf("gts index: %ld\n", the_gts->index); 
     add_gts_to_vgts(the_vgts, the_gts);
     check_gts_indices(the_vgts);
     gtsets_count++;
     if(gtsets_count >= max_number_of_accessions) break;
   }
-  //  print_vgts(the_vgts);
-  printf("number of genotype sets stored: %ld\n", gtsets_count);
-  printf("the_vgts size: %ld\n", the_vgts->size);
-  printf("n_markers: %ld\n", n_markers);
-  // construct_vlong_whole_numbers(
-  /* for(long iiii=0; iiii<the_vgts->size; iiii++){ */
-  /*   Gts* a_gts = the_vgts->a[iiii]; */
-  /*   printf("after set_vgts... iiii: %ld  a_gts->index: %ld\n", iiii, a_gts->index); */
-  /* } */
-  //  exit(EXIT_FAILURE);
+  printf("# done reading in genotypes data.\n");
+  printf("# time to read input: %12.6f\n", hi_res_time() - start);
+  printf("# number of genotype sets stored: %ld  %ld\n", gtsets_count, the_vgts->size);
+  printf("# n_markers: %ld\n", n_markers);
+
+  // *****  done reading in genotype sets for all accessions  **********
+
+  start = hi_res_time();
   Vlong* marker_indices = construct_vlong_whole_numbers(n_markers);
   shuffle_vlong(marker_indices); 
 
-  // void set_vgts_chunk_patterns(Vgts* the_vgts, Vlong* m_indices, long n_chunks, long k){
-  if(n_chunks*kmer_size > marker_indices->size){
-    n_chunks = marker_indices->size/kmer_size;
+  if(n_chunks*chunk_size > marker_indices->size){
+    n_chunks = marker_indices->size/chunk_size;
     printf("Reducing number of chunks to %ld\n", n_chunks);
   }
-  set_vgts_chunk_patterns(the_vgts, marker_indices, n_chunks, kmer_size); 
-
-  /* for(long iiii=0; iiii<the_vgts->size; iiii++){ */
-  /*   Gts* a_gts = the_vgts->a[iiii]; */
-  /*   printf("after set_vgts... iiii: %ld  a_gts->index: %ld\n", iiii, a_gts->index); */
-  /* } */
-
+  set_vgts_chunk_patterns(the_vgts, marker_indices, n_chunks, chunk_size); 
   printf("after set_vgts_chunk_patterns\n");
-  
-  long n_patterns = int_power(3, kmer_size); // get 3^kmer_size using integer math.
+  printf("time to shuffle indices and set the genotype set chunk patterns: %12.6f\n",  hi_res_time() - start);
+  // 
+
+  start = hi_res_time();
+  long n_patterns = int_power(3, chunk_size); // get 3^chunk_size using integer math.
   printf("n_patterns %ld\n", n_patterns);
   Chunk_pattern_ids* the_cpi = construct_chunk_pattern_ids(n_chunks, n_patterns);
-  printf("after construct_chunk_pattern_ids\n");
-  
   populate_chunk_pattern_ids_from_vgts(the_vgts, the_cpi);
+  printf("after construct and populate_chunk_pattern_ids_from_vgts\n");
+  printf("time to construct chunk_pattern_ids data structure: %12.6f\n", hi_res_time() - start);
 
-  //  print_chunk_pattern_ids(the_cpi);
-  printf("after populate_...\n");
- 
-  printf("the_vgts->size: %ld\n", the_vgts->size);
-  
-  for(long i_query=0; i_query< the_vgts->size; i_query++){
-    Gts* q_gts = the_vgts->a[i_query];
-    long q_md_gt_count = q_gts->missing_count;
-    long q_md_chunk_count = q_gts->md_chunk_count;
-    // Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){
-    Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
-    Vlong* kmer_match_counts = find_kmer_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
-    //  printf("after find_kmer_...\n");
-    //   printf("%ld\n", i_query);
-    for(long i_match=i_query; i_match<the_vgts->size; i_match++){
-      Gts* match_gts = the_vgts->a[i_match];
-      long matching_chunk_count = kmer_match_counts->a[i_match];
-      long match_md_gt_count = match_gts->missing_count;
-      long match_md_chunk_count = match_gts->md_chunk_count;
+  start = hi_res_time();
+  // getchar();
+  if(0){
+    for(long i_query=0; i_query< the_vgts->size; i_query++){
+      Gts* q_gts = the_vgts->a[i_query];
+      long q_md_gt_count = q_gts->missing_count;
+      long q_md_chunk_count = q_gts->md_chunk_count;
 
-      // using estimated number of usable chunks
-      long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
-      // sqrt(pow(q_md_gt_count, 2) + pow(match_md_gt_count, 2));
-      double est_usable_chunk_count =
-	n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), kmer_size);
-      double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
-      double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/kmer_size);
+      Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
+      Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
+      //  printf("after find_kmer_...\n");
+      //   printf("%ld\n", i_query);
+      for(long i_match=i_query; i_match<the_vgts->size; i_match++){
+	Gts* match_gts = the_vgts->a[i_match];
+	long matching_chunk_count = chunk_match_counts->a[i_match];
+	long match_md_gt_count = match_gts->missing_count;
+	long match_md_chunk_count = match_gts->md_chunk_count;
+
+	// using estimated number of usable chunks
+	long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
+	// sqrt(pow(q_md_gt_count, 2) + pow(match_md_gt_count, 2));
+	double est_usable_chunk_count =
+	  n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), chunk_size);
+	double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+	double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/chunk_size);
       
-      // using correct number of usable pairs (if was calculated)
-      double matching_chunk_fraction = est_matching_chunk_fraction;
-      long usable_chunk_count = est_usable_chunk_count;
-      if(do_dbl_md_chunk_counts){
-	long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
-	usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
-	matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
-      }
-      double est_agmr_2 = 1.0 - pow(matching_chunk_fraction, 1.0/kmer_size);
+	// using correct number of usable pairs (if was calculated)
+	double matching_chunk_fraction = est_matching_chunk_fraction;
+	long usable_chunk_count = est_usable_chunk_count;
+	if(do_dbl_md_chunk_counts){
+	  long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
+	  usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
+	  matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	}
+	double est_agmr_2 = 1.0 - pow(matching_chunk_fraction, 1.0/chunk_size);
       
    
 
-      /* long est_ok_gt_count = n_markers - (q_md_gt_count + match_md_gt_count - (double)(q_md_gt_count*match_md_gt_count)/(double)n_markers); */
-      /* double est_usable_chunk_count_2 = n_chunks*pow( (double)est_ok_gt_count/(double)n_markers, kmer_size ); */
-      /* // n_chunks - (q_md_chunk_count + match_md_chunk_count - (double)(q_md_chunk_count*match_md_chunk_count)/(double)n_chunks); */
+	/* long est_ok_gt_count = n_markers - (q_md_gt_count + match_md_gt_count - (double)(q_md_gt_count*match_md_gt_count)/(double)n_markers); */
+	/* double est_usable_chunk_count_2 = n_chunks*pow( (double)est_ok_gt_count/(double)n_markers, chunk_size ); */
+	/* // n_chunks - (q_md_chunk_count + match_md_chunk_count - (double)(q_md_chunk_count*match_md_chunk_count)/(double)n_chunks); */
 	 
-      //  usable_chunk_count = est_usable_chunk_count;
-      //  double agmr_cutoff = 1;
+	//  usable_chunk_count = est_usable_chunk_count;
+	//  double agmr_cutoff = 1;
      
-      //   double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
-      //   double agmr_est = 1.0 - pow(xxx, 1.0/kmer_size);
-      if(usable_chunk_count > 100  &&  matching_chunk_count > 0.3*usable_chunk_count){
-	// if(agmr_est < agmr_cutoff){
-	//	  printf("   matchidx: %ld  match counts: %ld \n", i, kmer_match_counts->a[i]);
-	fprintf(stderr, "%ld %ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n",
-		i_query, i_match, matching_chunk_count, 
-		est_matching_chunk_fraction, est_agmr_1,
-		matching_chunk_fraction, est_agmr_2,
-		agmr(q_gts, match_gts));
+	//   double xxx = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	//   double agmr_est = 1.0 - pow(xxx, 1.0/chunk_size);
+	if(usable_chunk_count > 50  &&  matching_chunk_count > 0.4*usable_chunk_count){
+	/*   	printf("query: %ld   n good candidates:  %ld \n", i_query, the_vmci->size); */
+	/* query_vmcis[i_query] = the_vmci; */
+	  // if(agmr_est < agmr_cutoff){
+	  //	  printf("   matchidx: %ld  match counts: %ld \n", i, chunk_match_counts->a[i]);
+	  fprintf(stderr, "%ld %ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n",
+		  i_query, i_match, matching_chunk_count, 
+		  est_matching_chunk_fraction, est_agmr_1,
+		  matching_chunk_fraction, est_agmr_2,
+		  agmr(q_gts, match_gts));
+	}
       }
     }
+    printf("time to find candidate matches and true agmrs: %12.6f\n", hi_res_time() - start);
+  }else{ // new way - get all good candidates for matches to all queries, and store them. Then 
+    Vmci** query_vmcis = (Vmci**)malloc(the_vgts->size * sizeof(Vmci*)); // 
+    
+    for(long i_query=0; i_query< the_vgts->size; i_query++){
+      Gts* q_gts = the_vgts->a[i_query];
+      long q_md_gt_count = q_gts->missing_count;
+      long q_md_chunk_count = q_gts->md_chunk_count;
+
+      Vlong* accidx_dblmdcounts = construct_vlong(the_vgts->size);
+      Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size, accidx_dblmdcounts);
+  	Vmci* the_vmci = construct_vmci(20);
+      for(long i_match=i_query; i_match<the_vgts->size; i_match++){
+
+	Gts* match_gts = the_vgts->a[i_match];
+	long matching_chunk_count = chunk_match_counts->a[i_match];
+	long match_md_gt_count = match_gts->missing_count;
+	long match_md_chunk_count = match_gts->md_chunk_count;
+
+	// using estimated number of usable chunks
+	long est_md_gt_count = (q_md_gt_count >= match_md_gt_count)? q_md_gt_count : match_md_gt_count;
+	double est_usable_chunk_count =
+	  n_chunks*pow((1.0 - (double)est_md_gt_count/(double)n_markers), chunk_size);
+	double est_matching_chunk_fraction = (double)matching_chunk_count/(double)est_usable_chunk_count;
+	//   double est_agmr_1 = 1.0 - pow(est_matching_chunk_fraction, 1.0/chunk_size);
+      
+	// using correct number of usable pairs (if it was calculated)
+	double matching_chunk_fraction = est_matching_chunk_fraction;
+	long usable_chunk_count = est_usable_chunk_count;
+	if(do_dbl_md_chunk_counts){
+	  long dbl_md_count = accidx_dblmdcounts->a[i_match]; // correct double missing data chunk count (if done in find_...
+	  usable_chunk_count = n_chunks - (q_md_chunk_count + match_md_chunk_count - dbl_md_count); // actual number of chunks with no missing data in either query or match
+	  matching_chunk_fraction = (double)matching_chunk_count/(double)usable_chunk_count; // fraction matching chunks
+	}
+	//	if(matching_chunk_count > 50) printf("matching chunk count: %ld  usable_chunk_count %ld \n", matching_chunk_count, usable_chunk_count);
+	if(usable_chunk_count > 50  &&  matching_chunk_count > 0.2*usable_chunk_count){
+	  Mci* the_mci = construct_mci(i_query, i_match, est_matching_chunk_fraction, matching_chunk_fraction);
+	  //est_usable_chunk_count, usable_chunk_count);
+	  add_mci_to_vmci(the_vmci, the_mci);
+	}
+	//	printf("query: %ld   n good candidates:  %ld \n", i_query, the_vmci->size);
+	query_vmcis[i_query] = the_vmci;
+      }
+      // free_vlong(accidx_dblmdcounts);
+      // free_vlong(chunk_match_counts);
+    }
+    printf("time to find candidate matches and store good candidates: %12.6f\n", hi_res_time() - start);
+
+    start = hi_res_time();
+    long true_agmr_count = 0;
+    for(long i_q=0; i_q<the_vgts->size; i_q++){
+      Vmci* the_vmci = query_vmcis[i_q];
+      Gts* q_gts = the_vgts->a[i_q];
+      //  printf("i_q: %ld  the_vmci->size:  %ld \n", i_q, the_vmci->size);
+      for(long i_m=0; i_m < the_vmci->size; i_m++){
+	Mci* the_mci = the_vmci->a[i_m];
+	
+	Gts* match_gts = the_vgts->a[the_mci->match_index];
+	double est_agmr_1 = 1.0 - pow(the_mci->est_matching_chunk_fraction, 1.0/chunk_size);
+	double est_agmr_2 = 1.0 - pow(the_mci->matching_chunk_fraction, 1.0/chunk_size);
+	double true_agmr = agmr(q_gts, match_gts);
+	true_agmr_count++;
+	fprintf(stderr, "%ld %ld  %9.6f %9.6f %9.6f %9.6f %9.6f\n", 
+		i_q, i_m,
+		the_mci->est_matching_chunk_fraction, est_agmr_1,
+		the_mci->matching_chunk_fraction, est_agmr_2,
+		true_agmr
+		);
+      }
+    }
+    printf("time to find %ld true agmrs: %12.6f\n", true_agmr_count, hi_res_time() - start);
   }
+  printf("done getting match candidates for all queries, and true agmrs for good candidates.\n");
+  // getchar();
   
   fclose(stream);
   exit(EXIT_SUCCESS);
@@ -320,6 +487,11 @@ void shuffle_vlong(Vlong* the_vlong){
   }
 }
 
+void free_vlong(Vlong* the_vlong){
+  free(the_vlong->a);
+  free(the_vlong);
+}
+
 // *****  Vstr  ***************************************************
 
 Vstr* construct_vstr(long min_size){
@@ -354,7 +526,6 @@ Gts* construct_gts(long index, char* gtset){
   the_gts->chunk_patterns = NULL;
   the_gts->md_chunk_count = 0;
   long missing_count = 0;
-  // printf("in construct_gts. index: %ld  gtset: %s \n", the_gts->index, the_gts->gtset);
   for(long i=0; ; i++){
     char a = the_gts->gtset[i];
     if(a == '\0') break;
@@ -404,7 +575,6 @@ long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long 
   } // loop over chunks.
   the_gts->chunk_patterns = chunk_pats;
   the_gts->md_chunk_count = gts_mdchunk_count;
-  printf("the_gts->index: %ld  %ld\n", the_gts->index, the_gts->md_chunk_count);
   return gts_mdchunk_count;
 }
 
@@ -565,7 +735,7 @@ void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi){
 
 // *****  Gts and Chunk_pattern_ids  ***********
  
-Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_dbl_md_counts){
+Vlong* find_chunk_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong* accidx_dbl_md_counts){
   long n_patterns = the_cpi->n_patterns;
   Vlong* chunk_pats = the_gts->chunk_patterns;
   Vlong* accidx_matchcounts = construct_vlong(n_accessions);
@@ -601,6 +771,42 @@ Vlong* find_kmer_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_a
   /*   printf("    DEF  %ld %ld \n", i, accidx_dbl_md_counts->a[i]); */
   /* } */
   return accidx_matchcounts; 
+}
+
+// ***** Mci  *****
+
+//Mci* construct_mci(long qidx, long midx, long n_matching_chunks, long est_n_usable_chunks, long n_usable_chunks){
+Mci* construct_mci(long qidx, long midx, double est_matching_chunk_fraction, double matching_chunk_fraction){
+  Mci* the_mci = (Mci*)malloc(1*sizeof(Mci));
+  the_mci->query_index = qidx;
+  the_mci->match_index = midx;
+  the_mci->est_matching_chunk_fraction = est_matching_chunk_fraction;
+  the_mci->matching_chunk_fraction = matching_chunk_fraction;
+
+  return the_mci;
+}
+
+// *****  Vmci  *********************************************************************************
+
+Vmci* construct_vmci(long init_cap){
+  Vmci* the_vmci = (Vmci*)malloc(1*sizeof(Vmci));
+  the_vmci->capacity = init_cap;
+  the_vmci->size = 0;
+  the_vmci->a = (Mci**)malloc(init_cap*sizeof(Mci*));
+  return the_vmci;
+}
+
+void add_mci_to_vmci(Vmci* the_vmci, Mci* mci){
+  long cap = the_vmci->capacity;
+  long n = the_vmci->size;
+  // if necessary, resize w realloc
+  if(n == cap){
+    cap *= 2;
+    the_vmci->a = (Mci**)realloc(the_vmci->a, cap*sizeof(Mci*));
+    the_vmci->capacity = cap;
+  }
+  the_vmci->a[n] = mci;
+  the_vmci->size++;
 }
 
 // *********************************************
@@ -667,6 +873,10 @@ double agmr(Gts* gtset1, Gts* gtset2){
     }
   }
   return (usable_pair_count > 0)? (double)mismatches/(double)usable_pair_count : -1;
+}
+
+double hi_res_time(void){
+  return (double)clock()/(double)CLOCKS_PER_SEC;
 }
   
 
