@@ -6,22 +6,14 @@
 #include <time.h>
 #include <ctype.h>
 #include <unistd.h>
+// #include <getopt.h>
+#include "vect.h"
+
 
 long do_dbl_md_chunk_counts = 0;
 
 //***********************************************************************************************
 // **************  typedefs  ********************************************************************
-typedef struct{
-  long capacity; // allocated size
-  long size; // number of elements
-  long* a; // array
-} Vlong;
-
-typedef struct{
-  long capacity; // allocated size
-  long size; // number of elements
-  char** a; // array of strings
-} Vstr;
 
 typedef struct{ // genotype set
   long index;
@@ -54,8 +46,6 @@ typedef struct{
   long query_index;
   long match_index;
   long n_matching_chunks;
-  //  long est_usable_chunk_count;
-  //  long usable_chunk_count;
   double est_matching_chunk_fraction;
   double matching_chunk_fraction;
 } Mci; // 'Mci = Matching chunk info'
@@ -75,16 +65,16 @@ long strpat_to_ipat(long len, char* strpat);
 double agmr(Gts* gts1, Gts* gts2);
 double hi_res_time(void);
 
-// ***** Vlong **********************************************************************************
-Vlong* construct_vlong(long cap); // capacity = cap, size = 0
-Vlong* construct_vlong_whole_numbers(long size); // initialize to 0,1,2,3,...size-1
-void add_long_to_vlong(Vlong* the_vlong, long x);
-void shuffle_vlong(Vlong* the_vlong);
-void free_vlong(Vlong* the_vlong);
+/* // ***** Vlong ********************************************************************************** */
+/* Vlong* construct_vlong(long cap); // capacity = cap, size = 0 */
+/* Vlong* construct_vlong_whole_numbers(long size); // initialize to 0,1,2,3,...size-1 */
+/* void add_long_to_vlong(Vlong* the_vlong, long x); */
+/* void shuffle_vlong(Vlong* the_vlong); */
+/* void free_vlong(Vlong* the_vlong); */
 
-// *****  Vstr  *********************************************************************************
-Vstr* construct_vstr(long min_size);
-void add_string_to_vstr(Vstr* the_vstr, char* str);
+/* // *****  Vstr  ********************************************************************************* */
+/* Vstr* construct_vstr(long min_size); */
+/* void add_string_to_vstr(Vstr* the_vstr, char* str); */
 
 // *****  Gts  **********************************************************************************
 Gts* construct_gts(long index, char* gtset);
@@ -232,13 +222,13 @@ main(int argc, char *argv[])
   } 
   
   // ***** read rest of file and store genotype sets and ids in Gts objs.  *****
-  int init_vgts_size = 100; // 
-  Vgts* the_vgts = construct_vgts(init_vgts_size);
-
+  int max_accession_id_length = 200;
+  int init_accessions_capacity = 100; //
+  Vstr* accession_ids = construct_vstr(init_accessions_capacity);
+  Vgts* the_vgts = construct_vgts(init_accessions_capacity);
+  
   long n_markers;
   long gtsets_count = 0;
-  Vstr* accession_ids = construct_vstr(100);
-
   if((nread = getline(&line, &len, stream)) != -1){ // process first line with genotypes 
     char* id = (char*)malloc(100*sizeof(char));
     char* gtstr = (char*)malloc(nread*sizeof(char)); 
@@ -422,83 +412,83 @@ main(int argc, char *argv[])
 
 // *******************  function definitions  ***************************************************
 
-// *****  Vlong  *****
+/* // *****  Vlong  ***** */
 
-Vlong* construct_vlong(long cap){
-  Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
-  the_vlong->capacity = cap;
-  the_vlong->size = 0;
-  the_vlong->a = (long*)malloc(cap*sizeof(char*));
-  return the_vlong;
-}
+/* Vlong* construct_vlong(long cap){ */
+/*   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong)); */
+/*   the_vlong->capacity = cap; */
+/*   the_vlong->size = 0; */
+/*   the_vlong->a = (long*)malloc(cap*sizeof(char*)); */
+/*   return the_vlong; */
+/* } */
 
-Vlong* construct_vlong_whole_numbers(long size){ // initialize to 0,1,2,3,...size-1
-  Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
-  the_vlong->capacity = size;
-  the_vlong->size = size;
-  the_vlong->a = (long*)malloc(size*sizeof(char*));
-  for(int i=0; i<size; i++){
-    the_vlong->a[i] = i;
-  }
-  return the_vlong;
-}
+/* Vlong* construct_vlong_whole_numbers(long size){ // initialize to 0,1,2,3,...size-1 */
+/*   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong)); */
+/*   the_vlong->capacity = size; */
+/*   the_vlong->size = size; */
+/*   the_vlong->a = (long*)malloc(size*sizeof(char*)); */
+/*   for(int i=0; i<size; i++){ */
+/*     the_vlong->a[i] = i; */
+/*   } */
+/*   return the_vlong; */
+/* } */
 
-void add_long_to_vlong(Vlong* the_vlong, long x){
-  long cap = the_vlong->capacity;
-  long n = the_vlong->size;
-  //  printf("cap n: %ld %ld\n", cap, n);
-  // if necessary, resize w realloc
-  if(n == cap){
-    cap *= 2;
-    the_vlong->a = (long*)realloc(the_vlong->a, cap*sizeof(long));
-    //    printf("realloc in add_long_to_vlong. new cap: %ld\n", cap);
-    the_vlong->capacity = cap;
-  }
-  //  printf("after realloc. cap: %ld \n", cap);
-  the_vlong->a[n] = x;
-  //  printf("after assignment to a[n]\n");
-  the_vlong->size++;
-  // printf("about to return from add_long_to_vlong. size %ld\n", the_vlong->size);
-}
+/* void add_long_to_vlong(Vlong* the_vlong, long x){ */
+/*   long cap = the_vlong->capacity; */
+/*   long n = the_vlong->size; */
+/*   //  printf("cap n: %ld %ld\n", cap, n); */
+/*   // if necessary, resize w realloc */
+/*   if(n == cap){ */
+/*     cap *= 2; */
+/*     the_vlong->a = (long*)realloc(the_vlong->a, cap*sizeof(long)); */
+/*     //    printf("realloc in add_long_to_vlong. new cap: %ld\n", cap); */
+/*     the_vlong->capacity = cap; */
+/*   } */
+/*   //  printf("after realloc. cap: %ld \n", cap); */
+/*   the_vlong->a[n] = x; */
+/*   //  printf("after assignment to a[n]\n"); */
+/*   the_vlong->size++; */
+/*   // printf("about to return from add_long_to_vlong. size %ld\n", the_vlong->size); */
+/* } */
 
-void shuffle_vlong(Vlong* the_vlong){
-  long n = the_vlong->size;
-  for(long i=0; i<n-1; i++){ // shuffle
-    int j = i+1 + (long)((n-1-i)*(double)rand()/RAND_MAX); // get an integer in the range [i+1,n-1]
-    long tmp = the_vlong->a[j];
-    the_vlong->a[j] = the_vlong->a[i];
-    the_vlong->a[i] = tmp;
-  }
-}
+/* void shuffle_vlong(Vlong* the_vlong){ */
+/*   long n = the_vlong->size; */
+/*   for(long i=0; i<n-1; i++){ // shuffle */
+/*     int j = i+1 + (long)((n-1-i)*(double)rand()/RAND_MAX); // get an integer in the range [i+1,n-1] */
+/*     long tmp = the_vlong->a[j]; */
+/*     the_vlong->a[j] = the_vlong->a[i]; */
+/*     the_vlong->a[i] = tmp; */
+/*   } */
+/* } */
 
-void free_vlong(Vlong* the_vlong){
-  free(the_vlong->a);
-  free(the_vlong);
-}
+/* void free_vlong(Vlong* the_vlong){ */
+/*   free(the_vlong->a); */
+/*   free(the_vlong); */
+/* } */
 
-// *****  Vstr  ***************************************************
+/* // *****  Vstr  *************************************************** */
 
-Vstr* construct_vstr(long min_size){
-  Vstr* the_vstr = (Vstr*)malloc(1*sizeof(Vstr));
-  the_vstr->capacity = min_size;
-  the_vstr->size = 0;
-  the_vstr->a = (char**)malloc(min_size*sizeof(char*));
-  printf("returning from construct_vstr\n");
-  return the_vstr;
-}
+/* Vstr* construct_vstr(long min_size){ */
+/*   Vstr* the_vstr = (Vstr*)malloc(1*sizeof(Vstr)); */
+/*   the_vstr->capacity = min_size; */
+/*   the_vstr->size = 0; */
+/*   the_vstr->a = (char**)malloc(min_size*sizeof(char*)); */
+/*   printf("returning from construct_vstr\n"); */
+/*   return the_vstr; */
+/* } */
 
-void add_string_to_vstr(Vstr* the_vstr, char* str){
-  long cap = the_vstr->capacity;
-  long n = the_vstr->size;
-  // if necessary, resize w realloc
-  if(n == cap){
-    cap *= 2;
-    the_vstr->a = (char**)realloc(the_vstr->a, cap*sizeof(char*));
-    the_vstr->capacity = cap;
-  }
-  the_vstr->a[n] = str;
-  the_vstr->size++;
-}
+/* void add_string_to_vstr(Vstr* the_vstr, char* str){ */
+/*   long cap = the_vstr->capacity; */
+/*   long n = the_vstr->size; */
+/*   // if necessary, resize w realloc */
+/*   if(n == cap){ */
+/*     cap *= 2; */
+/*     the_vstr->a = (char**)realloc(the_vstr->a, cap*sizeof(char*)); */
+/*     the_vstr->capacity = cap; */
+/*   } */
+/*   the_vstr->a[n] = str; */
+/*   the_vstr->size++; */
+/* } */
 
 
 // *****  Gts  ****************************************************
