@@ -217,79 +217,79 @@ main(int argc, char *argv[])
 
   // *****  done processing command line  *****
   GenotypesSet* the_genotypes_set;
-  if(0){
-  char* line = NULL;
-  size_t len = 0;
-  ssize_t nread;
+ /*  if(0){ */
+/*   char* line = NULL; */
+/*   size_t len = 0; */
+/*   ssize_t nread; */
 
-  long markerid_count = 0;
-  Vstr* marker_ids = construct_vstr(1000);
-  char* saveptr;
-  if((nread = getline(&line, &len, g_stream)) != -1){
-    char* token = strtok_r(line, "\t \n", &saveptr);
-    // printf("0line (pointer): %p \n", line);
-    if((token == NULL)  || (strcmp(token, "MARKER") != 0)){
-      exit(EXIT_FAILURE);
-    }
-    // printf("%s  ", token);
-    while(1){
-      token = strtok_r(NULL, "\t \n", &saveptr);
-      //  printf("line (pointer): %p \n", line);
-      if(token == NULL) break;
-      char* mrkr_id = (char*)malloc((strlen(token)+1)*sizeof(char)); 
-      add_string_to_vstr(marker_ids, strcpy(mrkr_id, token)); // store
-      //  printf("%s ", token);
-      markerid_count++;
-    }
-    // printf("\n");
-  }
-  //  free(line); line = NULL;
-  fprintf(stderr, "# number of marker ids counted: %ld \n", markerid_count);
+/*   long markerid_count = 0; */
+/*   Vstr* marker_ids = construct_vstr(1000); */
+/*   char* saveptr; */
+/*   if((nread = getline(&line, &len, g_stream)) != -1){ */
+/*     char* token = strtok_r(line, "\t \n", &saveptr); */
+/*     // printf("0line (pointer): %p \n", line); */
+/*     if((token == NULL)  || (strcmp(token, "MARKER") != 0)){ */
+/*       exit(EXIT_FAILURE); */
+/*     } */
+/*     // printf("%s  ", token); */
+/*     while(1){ */
+/*       token = strtok_r(NULL, "\t \n", &saveptr); */
+/*       //  printf("line (pointer): %p \n", line); */
+/*       if(token == NULL) break; */
+/*       char* mrkr_id = (char*)malloc((strlen(token)+1)*sizeof(char));  */
+/*       add_string_to_vstr(marker_ids, strcpy(mrkr_id, token)); // store */
+/*       //  printf("%s ", token); */
+/*       markerid_count++; */
+/*     } */
+/*     // printf("\n"); */
+/*   } */
+/*   //  free(line); line = NULL; */
+/*   fprintf(stderr, "# number of marker ids counted: %ld \n", markerid_count); */
 
-  long accession_count = 0;
-  Vstr* accession_ids = construct_vstr(1000);
-  Vstr* genotypes_strings = construct_vstr(1000);
-  long* missing_data_counts = (long*)calloc(markerid_count, sizeof(long));
-  Vlong* the_md_vlong = construct_vlong_from_array(markerid_count, missing_data_counts);
-  while((nread = getline(&line, &len, g_stream)) != -1){
-    accession_count++;
-    char* token = strtok_r(line, "\t \n", &saveptr);
-    //printf("accession number: %ld id: %s\n", accession_count, token);
-    char* acc_id = (char*)malloc((strlen(token)+1)*sizeof(char)); 
-    add_string_to_vstr(accession_ids, strcpy(acc_id, token)); // store copy of accession id
-    //  printf("%s  ", token);
-    long marker_count = 0;
-    char* genotypes = (char*)malloc((markerid_count+1) * sizeof(char));
-    genotypes[markerid_count] = '\0'; // terminate with null.
-    while(1){
-      token = strtok_r(NULL, "\t \n", &saveptr);
-      if(token == NULL) break;
-      double dosage = atof(token);
+/*   long accession_count = 0; */
+/*   Vstr* accession_ids = construct_vstr(1000); */
+/*   Vstr* genotypes_strings = construct_vstr(1000); */
+/*   long* missing_data_counts = (long*)calloc(markerid_count, sizeof(long)); */
+/*   Vlong* the_md_vlong = construct_vlong_from_array(markerid_count, missing_data_counts); */
+/*   while((nread = getline(&line, &len, g_stream)) != -1){ */
+/*     accession_count++; */
+/*     char* token = strtok_r(line, "\t \n", &saveptr); */
+/*     //printf("accession number: %ld id: %s\n", accession_count, token); */
+/*     char* acc_id = (char*)malloc((strlen(token)+1)*sizeof(char));  */
+/*     add_string_to_vstr(accession_ids, strcpy(acc_id, token)); // store copy of accession id */
+/*     //  printf("%s  ", token); */
+/*     long marker_count = 0; */
+/*     char* genotypes = (char*)malloc((markerid_count+1) * sizeof(char)); */
+/*     genotypes[markerid_count] = '\0'; // terminate with null. */
+/*     while(1){ */
+/*       token = strtok_r(NULL, "\t \n", &saveptr); */
+/*       if(token == NULL) break; */
+/*       double dosage = atof(token); */
 
-      if(dosage <= delta){
-	genotypes[marker_count] = '0';
-      }else if((dosage >= 1-delta) && (dosage <= 1+delta)){
-	genotypes[marker_count] = '1';
-      }else if(dosage >= 2-delta){
-	genotypes[marker_count] = '2';
-      }else{ // missing data
-	genotypes[marker_count] = '3';
-	missing_data_counts[marker_count]++;
-      }
-      marker_count++;
-    } // done reading dosages for all markers, and rounding to 0, 1, 2, 3
-    add_string_to_vstr(genotypes_strings, genotypes);
-    if(marker_count != markerid_count) exit(EXIT_FAILURE);
-    // printf("%s\n", genotypes);
-  } // done reading all lines  
-  free(line); // only needs to be freed once.
-  fclose(g_stream);
+/*       if(dosage <= delta){ */
+/* 	genotypes[marker_count] = '0'; */
+/*       }else if((dosage >= 1-delta) && (dosage <= 1+delta)){ */
+/* 	genotypes[marker_count] = '1'; */
+/*       }else if(dosage >= 2-delta){ */
+/* 	genotypes[marker_count] = '2'; */
+/*       }else{ // missing data */
+/* 	genotypes[marker_count] = '3'; */
+/* 	missing_data_counts[marker_count]++; */
+/*       } */
+/*       marker_count++; */
+/*     } // done reading dosages for all markers, and rounding to 0, 1, 2, 3 */
+/*     add_string_to_vstr(genotypes_strings, genotypes); */
+/*     if(marker_count != markerid_count) exit(EXIT_FAILURE); */
+/*     // printf("%s\n", genotypes); */
+/*   } // done reading all lines   */
+/*   free(line); // only needs to be freed once. */
+/*   fclose(g_stream); */
   
-  the_genotypes_set = construct_genotypesset(accession_ids, marker_ids, genotypes_strings, the_md_vlong);
-  }else{
+/*   the_genotypes_set = construct_genotypesset(accession_ids, marker_ids, genotypes_strings, the_md_vlong); */
+//  }else{
     the_genotypes_set = read_genotypes_file_and_store(g_stream, delta, max_marker_missing_data);
     fclose(g_stream);
-  }
+    //  }
   // ***************  read the pedigree file  ********************************
   fclose(p_stream);
 
@@ -344,7 +344,7 @@ GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double
       token = strtok_r(NULL, "\t \n", &saveptr);
       //  printf("line (pointer): %p \n", line);
       if(token == NULL) break;
-      char* mrkr_id = (char*)malloc((strlen(token)+1)*sizeof(char)); 
+      char* mrkr_id = (char*)malloc((strlen(token)+1)*sizeof(char));
       add_string_to_vstr(marker_ids, strcpy(mrkr_id, token)); // store
       //  printf("%s ", token);
       markerid_count++;
@@ -363,7 +363,7 @@ GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double
     accession_count++;
     char* token = strtok_r(line, "\t \n", &saveptr);
     //printf("accession number: %ld id: %s\n", accession_count, token);
-    char* acc_id = (char*)malloc((strlen(token)+1)*sizeof(char)); 
+    char* acc_id = (char*)malloc((strlen(token)+1)*sizeof(char));
     add_string_to_vstr(accession_ids, strcpy(acc_id, token)); // store copy of accession id
     //  printf("%s  ", token);
     long marker_count = 0;
