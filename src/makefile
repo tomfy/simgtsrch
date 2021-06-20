@@ -7,13 +7,13 @@ LDIR =../lib
 
 LIBS=-lm
 
-_DEPS = vect.h
+_DEPS = vect.h gtset.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ1 = vect.o simsearch.o 
+_OBJ1 = vect.o simsearch.o
 OBJ1 = $(patsubst %,$(ODIR)/%,$(_OBJ1))
 
-_OBJ2 = vect.o pedigree_test.o 
+_OBJ2 = vect.o pedigree_test.o gtset.o
 OBJ2 = $(patsubst %,$(ODIR)/%,$(_OBJ2))
 
 
