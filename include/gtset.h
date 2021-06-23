@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <assert.h>
 #include "vect.h"
 
 
@@ -12,6 +14,7 @@ typedef struct{
   Vlong* marker_missing_data_counts; //
 }GenotypesSet;
 
+GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double max_missing_data_fraction);
 GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gsets, Vlong* md_counts);
 void check_genotypesset(GenotypesSet* gtss, double max_marker_md_fraction);
 GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double max_md_fraction);

@@ -6,6 +6,23 @@
 
 // *********  typedefs  ********
 typedef struct{
+  double x;
+  double y;
+  double z;
+} Xyz;
+
+typedef struct{
+  long n;
+  long d;
+}ND; // numerator and denominator
+
+typedef struct{
+  ND nd1;
+  ND nd2;
+  ND nd3;
+}ND3; 
+  
+typedef struct{
   long capacity; // allocated size
   long size; // number of elements
   long* a; // array
@@ -20,28 +37,21 @@ typedef struct{
 typedef struct{
   long index;
   char* id;
-}IndexId;
+} IndexId;
 
 typedef struct{
   long capacity;
   long size;
   IndexId**a;
-}Vidxid;
+} Vidxid;
 
-typedef struct{
-  IndexId* Fparent;
-  IndexId* Mparent;
-  IndexId* Accession;
-}Pedigree;
 
-typedef struct{
-  long capacity;
-  long size;
-  Pedigree** a;
-}Vpedigree;
 
 
 // *****  Function declarations  ************************************************************
+// *****  ND3  ******
+void print_ND3(FILE* fh, ND3* the_nd3);
+
 // ***** Vlong ******************************************************************************
 Vlong* construct_vlong(long cap); // set capacity = cap, size = 0
 Vlong* construct_vlong_zeroes(long size);
@@ -70,19 +80,13 @@ IndexId* construct_indexid(long idx, char* id);
 void free_indexid(IndexId* the_idxid);
 
 // *****  Vidxid  *****
-Vidxid* construct_vidxid_from_array(long size, char** strs);
-Vidxid* construct_vidxid_from_vstr(Vstr* the_vstr);
+// Vidxid* construct_vidxid_from_array(long size, char** strs);
+Vidxid* construct_vidxid_from_vstr(Vstr* ids);
+Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids);
 int strcmpx(const void* v1, const void* v2);
 void sort_vidxid_by_id(Vidxid* the_vidxid);
 long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id);
+long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids);
 void print_vidxid(Vidxid* the_vidxid);
 void free_vidxid(Vidxid* the_vidxid);
 
-// *****  Pedigree  *****
-Pedigree* construct_pedigree(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid);
-void free_pedigree(Pedigree* the_pedigree);
-
-// *****  Vpedigree  *****
-Vpedigree* construct_vpedigree(long cap);
-void add_pedigree_to_vpedigree(Vpedigree* the_vped, Pedigree* the_ped);
-void free_vpedigree(Vpedigree* the_vped);

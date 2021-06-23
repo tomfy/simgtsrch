@@ -2,10 +2,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "vect.h"
 
 
 // *****  Vlong  **********************************************
+void print_ND3(FILE* fh, ND3* the_nd3){
+  fprintf(fh, "%ld %8.5lf  %ld %8.5lf  %ld %8.5lf",
+	  the_nd3->nd1.d, (the_nd3->nd1.d > 0)? (double)the_nd3->nd1.n/(double)the_nd3->nd1.d : -1,
+	  the_nd3->nd2.d, (the_nd3->nd2.d > 0)? (double)the_nd3->nd2.n/(double)the_nd3->nd2.d : -1,
+	  the_nd3->nd3.d, (the_nd3->nd3.d > 0)? (double)the_nd3->nd3.n/(double)the_nd3->nd3.d : -1
+	  );
+}
 
 Vlong* construct_vlong(long cap){
   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
@@ -158,43 +166,48 @@ void free_indexid(IndexId* the_idxid){
 }
 
 // *****  Vidxid  *****
-Vidxid* construct_vidxid_from_array(long size, char** strs){
+/* Vidxid* construct_vidxid_from_array(long size, char** strs){ */
+/*   Vidxid* the_vidxid = (Vidxid*)malloc(sizeof(Vidxid)); */
+/*   the_vidxid->capacity = size; */
+/*   the_vidxid->size = size; */
+/*   the_vidxid->a = (IndexId**)malloc(size*sizeof(IndexId*)); */
+/*   for(long i=0; i<size; i++){ */
+/*     IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId)); */
+/*     the_idxid->index = i; */
+/*     the_idxid->id = strcpy((char*)malloc((strlen(strs[i])+1)*sizeof(char)), strs[i]); */
+/*     the_vidxid->a[i] = the_idxid; */
+/*   } */
+/*   return the_vidxid;   */
+/* } */
+
+Vidxid* construct_vidxid_from_vstr(Vstr* ids){
   Vidxid* the_vidxid = (Vidxid*)malloc(sizeof(Vidxid));
-  the_vidxid->capacity = size;
-  the_vidxid->size = size;
-  the_vidxid->a = (IndexId**)malloc(size*sizeof(IndexId*));
-  for(long i=0; i<size; i++){
+  the_vidxid->capacity = ids->size;
+  the_vidxid->size = ids->size;
+  the_vidxid->a = (IndexId**)malloc(ids->size*sizeof(IndexId*));
+  for(long i=0; i<ids->size; i++){
     IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId));
     the_idxid->index = i;
-    the_idxid->id = strcpy((char*)malloc((strlen(strs[i])+1)*sizeof(char)), strs[i]);
+    the_idxid->id = strcpy((char*)malloc((strlen(ids->a[i])+1)*sizeof(char)), ids->a[i]);
     the_vidxid->a[i] = the_idxid;
   }
   return the_vidxid;  
 }
 
-Vidxid* construct_vidxid_from_vstr(Vstr* the_vstr){
-  Vidxid* the_vidxid = (Vidxid*)malloc(sizeof(Vidxid));
-  the_vidxid->capacity = the_vstr->size;
-  the_vidxid->size = the_vstr->size;
-  the_vidxid->a = (IndexId**)malloc(the_vstr->size*sizeof(IndexId*));
-  for(long i=0; i<the_vstr->size; i++){
-    IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId));
-    the_idxid->index = i;
-    the_idxid->id = strcpy((char*)malloc((strlen(the_vstr->a[i])+1)*sizeof(char)), the_vstr->a[i]);
-    the_vidxid->a[i] = the_idxid;
-  }
-  return the_vidxid;  
+Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids){
+  Vidxid* the_vidxid = construct_vidxid_from_vstr(ids);
+  sort_vidxid_by_id(the_vidxid);
+   if(DBUG) assert(check_idxid_map(the_vidxid, ids) == 1);
+  return the_vidxid;
 }
 
 int strcmpx(const void* v1, const void* v2){
   const IndexId** s1 = (const IndexId**)v1;
   const IndexId** s2 = (const IndexId**)v2;
-  // fprintf(stderr, "%ld %s  %ld %s\n", (*s1)->index, (*s1)->id, (*s2)->index, (*s2)->id);
   return strcmp((*s1)->id, (*s2)->id);
 }
 
 void sort_vidxid_by_id(Vidxid* the_vidxid){ // sort in place
-  //   qsort(idxids, accession_ids->size, sizeof(IndexId*), strcmpx);
   qsort(the_vidxid->a, the_vidxid->size, sizeof(IndexId*), strcmpx);
 }
 
@@ -248,6 +261,15 @@ long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id){
   return result;
 }
 
+long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids){
+  for(long i=0; i<accession_ids->size; i++){
+    char* id = accession_ids->a[i];
+    long idx = index_of_id_in_vidxid(vidxid, id);
+    if(idx != i) return 0;
+  }
+  return 1;
+}
+
 void print_vidxid(Vidxid* the_vidxid){
   for(long i=0; i<the_vidxid->size; i++){
     IndexId* the_idxid = the_vidxid->a[i];
@@ -263,52 +285,3 @@ void free_vidxid(Vidxid* the_vidxid){
   free(the_vidxid);
 }
 
-// *****  Pedigree  *****
-Pedigree* construct_pedigree(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid){
-  Pedigree* the_pedigree = (Pedigree*)malloc(sizeof(Pedigree));
-  the_pedigree->Fparent = fempar_idxid;
-  the_pedigree->Mparent = malpar_idxid;
-  the_pedigree->Accession = acc_idxid;
-  return the_pedigree;
-}
-
-void free_pedigree(Pedigree* the_pedigree){
-  free_indexid(the_pedigree->Fparent);
-  free_indexid(the_pedigree->Mparent);
-  free_indexid(the_pedigree->Accession);
-  free(the_pedigree);
-}
-
-// *****  Vpedigree  *****
-Vpedigree* construct_vpedigree(long cap){
-  Vpedigree* the_vped = (Vpedigree*)malloc(sizeof(Vpedigree));
-  the_vped->capacity = cap;
-  the_vped->size = 0;
-  the_vped->a = (Pedigree**)malloc(the_vped->capacity*sizeof(Pedigree*));
-}
-  
-void add_pedigree_to_vpedigree(Vpedigree* the_vped, Pedigree* the_ped){
-long cap = the_vped->capacity;
-long n = the_vped->size;
- if(n == cap){
-    cap *= 2;
-    the_vped->a = (Pedigree**)realloc(the_vped->a, cap*sizeof(Pedigree*));
-    the_vped->capacity = cap;
-    //  fprintf(stderr, "in add_pedigree_to... capacity increased to %ld. pointer to new memory block: %p\n", cap, the_vped->a);
-  }
-  //  printf("after realloc. cap: %ld \n", cap);
-  the_vped->a[n] = the_ped;
-  //  printf("after assignment to a[n]\n");
-  the_vped->size++;
-  // printf("about to return from add_pedigree_to_vpedigree. size %ld\n", the_vped->size);
-}
-
-void free_vpedigree(Vpedigree* the_vped){
-  //fprintf(stderr, "in free_vpedigree. size: %ld\n", the_vped->size);
-  for(long i=0; i<the_vped->size; i++){
-    //fprintf(stderr, "freeing pedigree %ld \n", i);
-    free_pedigree(the_vped->a[i]);
-  }
-  free(the_vped->a);
-  free(the_vped);
-}
