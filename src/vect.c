@@ -7,13 +7,6 @@
 
 
 // *****  Vlong  **********************************************
-void print_ND3(FILE* fh, ND3* the_nd3){
-  fprintf(fh, "%ld %8.5lf  %ld %8.5lf  %ld %8.5lf",
-	  the_nd3->nd1.d, (the_nd3->nd1.d > 0)? (double)the_nd3->nd1.n/(double)the_nd3->nd1.d : -1,
-	  the_nd3->nd2.d, (the_nd3->nd2.d > 0)? (double)the_nd3->nd2.n/(double)the_nd3->nd2.d : -1,
-	  the_nd3->nd3.d, (the_nd3->nd3.d > 0)? (double)the_nd3->nd3.n/(double)the_nd3->nd3.d : -1
-	  );
-}
 
 Vlong* construct_vlong(long cap){
   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
@@ -137,11 +130,11 @@ char* copy_ith_str_from_vstr(Vstr* the_vstr, long i){ // returns a copy of the i
   return strcpy((char*)malloc((strlen(s)+1)*sizeof(char)), s);
 }
 
-void print_vstr(Vstr* the_vstr){
+void print_vstr(FILE* fh, Vstr* the_vstr){
   for(long i=0; i<the_vstr->size; i++){
-    fprintf(stderr, "%s ", the_vstr->a[i]);
+    fprintf(fh, "%s ", the_vstr->a[i]);
   }
-  fprintf(stderr, "\n");
+  fprintf(fh, "\n");
 }
 
 void free_vstr(Vstr* the_vstr){
@@ -270,10 +263,10 @@ long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids){
   return 1;
 }
 
-void print_vidxid(Vidxid* the_vidxid){
+void print_vidxid(FILE* fh, Vidxid* the_vidxid){
   for(long i=0; i<the_vidxid->size; i++){
     IndexId* the_idxid = the_vidxid->a[i];
-    fprintf(stderr, "%ld  %s\n", the_idxid->index, the_idxid->id);
+    fprintf(fh, "%ld  %s\n", the_idxid->index, the_idxid->id);
   }
 }
 

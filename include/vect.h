@@ -11,17 +11,7 @@ typedef struct{
   double z;
 } Xyz;
 
-typedef struct{
-  long n;
-  long d;
-}ND; // numerator and denominator
 
-typedef struct{
-  ND nd1;
-  ND nd2;
-  ND nd3;
-}ND3; 
-  
 typedef struct{
   long capacity; // allocated size
   long size; // number of elements
@@ -47,10 +37,7 @@ typedef struct{
 
 
 
-
 // *****  Function declarations  ************************************************************
-// *****  ND3  ******
-void print_ND3(FILE* fh, ND3* the_nd3);
 
 // ***** Vlong ******************************************************************************
 Vlong* construct_vlong(long cap); // set capacity = cap, size = 0
@@ -68,25 +55,20 @@ Vstr* construct_vstr_copy(Vstr* the_vstr);
 void add_string_to_vstr(Vstr* the_vstr, char* str); // push, realloc if necessary
 char* ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last element, etc.
 char* copy_ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last element, etc.
-void print_vstr(Vstr* the_vstr);
+void print_vstr(FILE* fh, Vstr* the_vstr);
 void free_vstr(Vstr* the_vstr); // free memory
-
-// *****  Vchar  (string as vector of chars)  ***********************************************
-// Vstr* construct_vstr_from_string(char* str); // initialize with null-terminated string
-
 
 // *****  IndexId  *****
 IndexId* construct_indexid(long idx, char* id);
 void free_indexid(IndexId* the_idxid);
 
 // *****  Vidxid  *****
-// Vidxid* construct_vidxid_from_array(long size, char** strs);
 Vidxid* construct_vidxid_from_vstr(Vstr* ids);
 Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids);
 int strcmpx(const void* v1, const void* v2);
 void sort_vidxid_by_id(Vidxid* the_vidxid);
 long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id);
 long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids);
-void print_vidxid(Vidxid* the_vidxid);
+void print_vidxid(FILE* fh, Vidxid* the_vidxid);
 void free_vidxid(Vidxid* the_vidxid);
 

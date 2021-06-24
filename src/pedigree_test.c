@@ -112,7 +112,7 @@ main(int argc, char *argv[])
   GenotypesSet* the_genotypes_set = read_genotypes_file_and_store(g_stream, delta, max_marker_missing_data);
   fclose(g_stream);
 
-  print_genotypesset_summary_info(the_genotypes_set);
+  print_genotypesset_summary_info(stderr, the_genotypes_set);
   if(DBUG) check_genotypesset(the_genotypes_set, max_marker_missing_data);
   
   long n_accessions = the_genotypes_set->n_accessions;
@@ -141,7 +141,7 @@ main(int argc, char *argv[])
   GenotypesSet* the_cleaned_genotypes_set = construct_cleaned_genotypesset(the_genotypes_set, max_marker_missing_data);
   long n_markers_good = the_cleaned_genotypes_set->n_markers;
   free_genotypesset(the_genotypes_set);
-  print_genotypesset_summary_info(the_cleaned_genotypes_set);
+  print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
   // print_genotypesset(the_cleaned_genotypes_set);
  
   if(DBUG) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
@@ -150,7 +150,8 @@ main(int argc, char *argv[])
 
   t_start = hi_res_time();
   for(long i=0; i<pedigrees->size; i++){
-    print_pedigree_stats(pedigrees->a[i], the_cleaned_genotypes_set);
+    calculate_pedigree_test_info(pedigrees->a[i], the_cleaned_genotypes_set);
+    print_pedigree_test_info(stdout, pedigrees->a[i], the_cleaned_genotypes_set);
   }
   
   fprintf(stderr, "Done checking %ld pedigrees. Time: %lf sec.\n",

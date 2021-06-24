@@ -6,6 +6,15 @@
 
 #define PEDIGREE_FIELDS 7 // number of whitespace separated fields in pedigree file, with ids in last 3 fields.
 
+// *****  Ahr  *****
+void print_Ahr(FILE* fh, Ahr the_ahr){
+  fprintf(fh, "%ld %8.5lf  %ld %8.5lf  %ld %8.5lf",
+	  the_ahr.a.d, (the_ahr.a.d > 0)? (double)the_ahr.a.n/(double)the_ahr.a.d : -1,
+	  the_ahr.h.d, (the_ahr.h.d > 0)? (double)the_ahr.h.n/(double)the_ahr.h.d : -1,
+	  the_ahr.r.d, (the_ahr.r.d > 0)? (double)the_ahr.r.n/(double)the_ahr.r.d : -1
+	  );
+}
+
 // *****  Pedigree  *****
 Pedigree* construct_pedigree(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid){
   Pedigree* the_pedigree = (Pedigree*)malloc(sizeof(Pedigree));
@@ -15,7 +24,7 @@ Pedigree* construct_pedigree(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId*
   return the_pedigree;
 }
 
-void agmr_hgmr_r(char* gts1, char* gts2, ND3* the_nd3){
+void agmr_hgmr_r(char* gts1, char* gts2, Ahr* the_ahr){
   char c1, c2;
   long n_00 = 0;
   long n_01 = 0;
@@ -74,12 +83,12 @@ void agmr_hgmr_r(char* gts1, char* gts2, ND3* the_nd3){
   long r_denom = r_numer + n_00 + n_22;
   double r = (r_denom)? (double)r_numer/(double)r_denom : -1; // r small: if gts1 is parent of gts2, other parent likely also be gts1
 
-  the_nd3->nd1.n = a_numer;
-  the_nd3->nd1.d = a_denom;
-  the_nd3->nd2.n = h_numer;
-  the_nd3->nd2.d = h_denom;
-  the_nd3->nd3.n = r_numer;
-  the_nd3->nd3.d = r_denom;
+  the_ahr->a.n = a_numer;
+  the_ahr->a.d = a_denom;
+  the_ahr->h.n = h_numer;
+  the_ahr->h.d = h_denom;
+  the_ahr->r.n = r_numer;
+  the_ahr->r.d = r_denom;
 }
 
 
@@ -101,25 +110,29 @@ double hgmr(char* gts1, char* gts2){
   return (n_denom > 0)? (double)n_numer/(double)n_denom : -1;  
 }
 
-void print_pedigree_stats(Pedigree* the_pedigree, GenotypesSet* the_gtsset){
-  printf("%s %s %s  ",
+void calculate_pedigree_test_info(Pedigree* the_pedigree, GenotypesSet* the_gtsset){
+
+ char* fempar_gts = the_gtsset->genotype_sets->a[the_pedigree->Fparent->index];
+  char* malpar_gts = the_gtsset->genotype_sets->a[the_pedigree->Mparent->index];
+  char* acc_gts = the_gtsset->genotype_sets->a[the_pedigree->Accession->index];
+    
+  Ahr fp_ahr, mp_ahr, fm_ahr;
+  agmr_hgmr_r(fempar_gts, acc_gts, &(the_pedigree->fp_ahr));
+  agmr_hgmr_r(malpar_gts, acc_gts, &(the_pedigree->mp_ahr));
+  agmr_hgmr_r(fempar_gts, malpar_gts, &(the_pedigree->fm_ahr));
+}
+
+void print_pedigree_test_info(FILE* fh, Pedigree* the_pedigree, GenotypesSet* the_gtsset){
+  fprintf(fh, "%s %ld %s %s  ",
 	 the_gtsset->accession_ids->a[the_pedigree->Accession->index],
+	 the_gtsset->accession_missing_data_counts->a[the_pedigree->Accession->index],
 	 the_gtsset->accession_ids->a[the_pedigree->Fparent->index],
 	 the_gtsset->accession_ids->a[the_pedigree->Mparent->index]
 	 );
 	  
-  char* fempar_gts = the_gtsset->genotype_sets->a[the_pedigree->Fparent->index];
-  char* malpar_gts = the_gtsset->genotype_sets->a[the_pedigree->Mparent->index];
-  char* acc_gts = the_gtsset->genotype_sets->a[the_pedigree->Accession->index];
-    
-  ND3 fp_ahr, mp_ahr, fm_ahr;
-  agmr_hgmr_r(fempar_gts, acc_gts, &fp_ahr);
-  agmr_hgmr_r(malpar_gts, acc_gts, &mp_ahr);
-  agmr_hgmr_r(fempar_gts, malpar_gts, &fm_ahr);
-
-  print_ND3(stdout, &fp_ahr); printf("  ");
-  print_ND3(stdout, &mp_ahr); printf("  ");
-  print_ND3(stdout, &fm_ahr); printf("\n");
+  print_Ahr(fh, the_pedigree->fp_ahr); fprintf(fh, "  ");
+  print_Ahr(fh, the_pedigree->mp_ahr); fprintf(fh, "  ");
+  print_Ahr(fh, the_pedigree->fm_ahr); fprintf(fh, "\n");
 }
 
 void free_pedigree(Pedigree* the_pedigree){

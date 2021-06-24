@@ -76,6 +76,7 @@ GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gset
   the_gtsset->n_accessions = acc_ids->size; 
   the_gtsset->n_markers = marker_ids->size;
   the_gtsset->accession_ids = acc_ids;
+  the_gtsset->accession_missing_data_counts = construct_vlong_zeroes(the_gtsset->n_accessions);
   the_gtsset->marker_ids = marker_ids;
   the_gtsset->genotype_sets = gsets;
   the_gtsset->marker_missing_data_counts = md_counts;
@@ -97,6 +98,7 @@ void check_genotypesset(GenotypesSet* gtss, double max_marker_md_fraction){
     assert(md_counts[j] == gtss->marker_missing_data_counts->a[j]);
   }
   free(md_counts);
+  set_accession_missing_data_counts(gtss);
   fprintf(stderr, "Successfully completed check_genotypesset\n");
 }
 
@@ -142,25 +144,38 @@ GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double ma
     if(DBUG) assert(k == n_markers_to_keep);
   }
   free_vlong(md_ok);
+   set_accession_missing_data_counts(the_gtsset);
   //  GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gsets, Vlong* md_counts){
   GenotypesSet* cleaned_gtsset = construct_genotypesset(copy_of_accids, cleaned_marker_ids, cleaned_gsets, cleaned_md_counts);
   return cleaned_gtsset;
 }
 
-
-void print_genotypesset(GenotypesSet* the_gtsset){
-  printf("MARKER  ");
-  for(long i=0; i<the_gtsset->n_markers; i++){
-    printf("%s ", the_gtsset->marker_ids->a[i]);
-  }printf("\n");
-  for(long i=0; i<the_gtsset->n_accessions; i++){
-    printf("%s  %s\n", the_gtsset->accession_ids->a[i], the_gtsset->genotype_sets->a[i]);
+void set_accession_missing_data_counts(GenotypesSet* the_gtsset){
+  for(long i=0; i<the_gtsset->accession_ids->size; i++){
+    long md_count = 0;
+   char* the_gtsstr = the_gtsset->genotype_sets->a[i];
+    for(long j=0; the_gtsstr[j] != '\0'; j++){
+      if(the_gtsstr[j] == '3'){
+	md_count++;
+      }
+    }
+    the_gtsset->accession_missing_data_counts->a[i] = md_count;
   }
 }
 
-void print_genotypesset_summary_info(GenotypesSet* the_gtsset){
-  fprintf(stderr, "# n_accessions: %ld\n", the_gtsset->n_accessions);
-  fprintf(stderr, "# n_markers: %ld\n", the_gtsset->n_markers);
+void print_genotypesset(FILE* fh, GenotypesSet* the_gtsset){
+  printf("MARKER  ");
+  for(long i=0; i<the_gtsset->n_markers; i++){
+    fprintf(fh, "%s ", the_gtsset->marker_ids->a[i]);
+  }fprintf(fh, "\n");
+  for(long i=0; i<the_gtsset->n_accessions; i++){
+    fprintf(fh, "%s  %s\n", the_gtsset->accession_ids->a[i], the_gtsset->genotype_sets->a[i]);
+  }
+}
+
+void print_genotypesset_summary_info(FILE* fh, GenotypesSet* the_gtsset){
+  fprintf(fh, "# n_accessions: %ld\n", the_gtsset->n_accessions);
+  fprintf(fh, "# n_markers: %ld\n", the_gtsset->n_markers);
 }
 
 void free_genotypesset(GenotypesSet* the_gtsset){
