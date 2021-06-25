@@ -1,10 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "gtset.h"
-//#include "vect.h"
+// #include "vect.h"
 #include "pedigree.h"
 
 #define PEDIGREE_FIELDS 7 // number of whitespace separated fields in pedigree file, with ids in last 3 fields.
+
+// extern int do_checks_flag; // option -c sets this to 1 to do some checks.
+
 
 // *****  Ahr  *****
 void print_Ahr(FILE* fh, Ahr the_ahr){

@@ -1,5 +1,6 @@
 #include "gtset.h"
 
+extern int do_checks_flag; // option -c sets this to 1 to do some checks.
 
 GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double max_missing_data_fraction){
   char* line = NULL;
@@ -141,7 +142,7 @@ GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double ma
     }
     cleaned_gts[k] = '\0'; // terminate with null.
     add_string_to_vstr(cleaned_gsets, cleaned_gts);
-    if(DBUG) assert(k == n_markers_to_keep);
+    if(DBUG && do_checks_flag) assert(k == n_markers_to_keep);
   }
   free_vlong(md_ok);
    set_accession_missing_data_counts(the_gtsset);
@@ -182,6 +183,7 @@ void free_genotypesset(GenotypesSet* the_gtsset){
   free_vstr(the_gtsset->accession_ids);
   free_vstr(the_gtsset->marker_ids);
   free_vstr(the_gtsset->genotype_sets);
+  free_vlong(the_gtsset->accession_missing_data_counts);
   free_vlong(the_gtsset->marker_missing_data_counts);
   free(the_gtsset);
 }

@@ -11,6 +11,7 @@
 #include "gtset.h"
 #include "pedigree.h"
 
+int do_checks_flag = 0; // option -c sets this to 1 to do some checks.
 
 double hi_res_time(void);
 
@@ -23,6 +24,8 @@ main(int argc, char *argv[])
 {
   double delta = 0.05; // default; control this with -d command line option.
   double max_marker_missing_data = 0.2; // default; control this with -x command line option.
+  char* output_filename = "pedigree_check_info";
+
   long max_number_of_accessions = 1000000;
 
   
@@ -39,9 +42,12 @@ main(int argc, char *argv[])
 
   // g: genotypes filename, p pedigree filename,  d (delta for rounding), x max fraction of missing data for markers.
   int c;
-  while((c = getopt(argc, argv, "g:p:d:x:")) != -1){
+  while((c = getopt(argc, argv, "cg:p:d:x:o:")) != -1){
     // fprintf(stderr, "c: %c %s %d\n", c, optarg, optind);
     switch(c){
+    case 'c':
+      do_checks_flag = 1;
+      break;
     case 'g':
       genotypes_filename = optarg;
       g_stream = fopen(genotypes_filename, "r");
@@ -57,6 +63,9 @@ main(int argc, char *argv[])
 	fprintf(stderr, "Failed to open %s for reading.\n", pedigrees_filename);
 	exit(EXIT_FAILURE);
       }
+      break;
+    case 'o':
+      output_filename = optarg;
       break;
     case 'd':
       if(optarg == 0){
@@ -76,7 +85,7 @@ main(int argc, char *argv[])
       break;
     case '?':
       printf("? case in command line processing switch.\n");
-      if ((optopt == 'i') || (optopt == 'n') || (optopt == 'k'))
+      if ((optopt == 'g') || (optopt == 'p') || (optopt == 'd') || (optopt == 'x') || (optopt == 'o'))
 	fprintf(stderr, "Option -%c requires an argument.\n", optopt);
       else if (isprint (optopt))
 	fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -101,9 +110,16 @@ main(int argc, char *argv[])
     perror("must specify pedigrees filename: -i <filename>");
     exit(EXIT_FAILURE);
   }
-
-  fprintf(stderr, "# genotypes file: %s  pedigree file: %s  delta: %5.3lf  max marker missing data: %5.3lf \n",
-	  genotypes_filename, pedigrees_filename, delta, max_marker_missing_data);
+  
+  FILE *o_stream = NULL;
+  o_stream = fopen(output_filename, "w");
+  if(o_stream == NULL){
+    fprintf(stderr, "Failed to open %s for writing.\n", output_filename);
+    exit(EXIT_FAILURE);
+  }
+      
+  fprintf(stderr, "# genotypes file: %s  pedigree file: %s  delta: %5.3lf  max marker missing data: %5.3lf  output file: %s\n",
+	  genotypes_filename, pedigrees_filename, delta, max_marker_missing_data, output_filename);
 
   // *****  done processing command line  *****
 
@@ -113,7 +129,7 @@ main(int argc, char *argv[])
   fclose(g_stream);
 
   print_genotypesset_summary_info(stderr, the_genotypes_set);
-  if(DBUG) check_genotypesset(the_genotypes_set, max_marker_missing_data);
+  if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
   
   long n_accessions = the_genotypes_set->n_accessions;
   long n_markers_all = the_genotypes_set->n_markers;
@@ -144,14 +160,14 @@ main(int argc, char *argv[])
   print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
   // print_genotypesset(the_cleaned_genotypes_set);
  
-  if(DBUG) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
+  if(DBUG && do_checks_flag) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
   fprintf(stderr, "Done cleaning marker set. Keeping %ld markers. Time: %lf sec.\n",
 	  n_markers_good, hi_res_time() - t_start);
 
   t_start = hi_res_time();
   for(long i=0; i<pedigrees->size; i++){
     calculate_pedigree_test_info(pedigrees->a[i], the_cleaned_genotypes_set);
-    print_pedigree_test_info(stdout, pedigrees->a[i], the_cleaned_genotypes_set);
+    print_pedigree_test_info(o_stream, pedigrees->a[i], the_cleaned_genotypes_set);
   }
   
   fprintf(stderr, "Done checking %ld pedigrees. Time: %lf sec.\n",
@@ -161,6 +177,7 @@ main(int argc, char *argv[])
 
   // ********************  cleanup  **************************
   t_start = hi_res_time();
+  fclose(o_stream);
   free_genotypesset(the_cleaned_genotypes_set);
   free_vidxid(the_vidxid);
   free_vpedigree(pedigrees);
