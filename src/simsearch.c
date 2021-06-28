@@ -65,16 +65,6 @@ long strpat_to_ipat(long len, char* strpat);
 double agmr(Gts* gts1, Gts* gts2);
 double hi_res_time(void);
 
-/* // ***** Vlong ********************************************************************************** */
-/* Vlong* construct_vlong(long cap); // capacity = cap, size = 0 */
-/* Vlong* construct_vlong_whole_numbers(long size); // initialize to 0,1,2,3,...size-1 */
-/* void add_long_to_vlong(Vlong* the_vlong, long x); */
-/* void shuffle_vlong(Vlong* the_vlong); */
-/* void free_vlong(Vlong* the_vlong); */
-
-/* // *****  Vstr  ********************************************************************************* */
-/* Vstr* construct_vstr(long min_size); */
-/* void add_string_to_vstr(Vstr* the_vstr, char* str); */
 
 // *****  Gts  **********************************************************************************
 Gts* construct_gts(long index, char* gtset);
@@ -145,7 +135,7 @@ main(int argc, char *argv[])
 	exit(EXIT_FAILURE);
       }
       break;
-    case 'n':
+    case 'n': 
       n_chunks = (long)atoi(optarg);
       if(n_chunks == 0){
 	printf("option n requires a numerical argument > 0\n");
