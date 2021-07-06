@@ -81,6 +81,7 @@ GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gset
   the_gtsset->marker_ids = marker_ids;
   the_gtsset->genotype_sets = gsets;
   the_gtsset->marker_missing_data_counts = md_counts;
+ 
   return the_gtsset;
 }
 
@@ -99,7 +100,7 @@ void check_genotypesset(GenotypesSet* gtss, double max_marker_md_fraction){
     assert(md_counts[j] == gtss->marker_missing_data_counts->a[j]);
   }
   free(md_counts);
-  set_accession_missing_data_counts(gtss);
+  // set_accession_missing_data_counts(gtss);
   fprintf(stderr, "Successfully completed check_genotypesset\n");
 }
 
@@ -145,13 +146,14 @@ GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double ma
     if(DBUG && do_checks_flag) assert(k == n_markers_to_keep);
   }
   free_vlong(md_ok);
-   set_accession_missing_data_counts(the_gtsset);
   //  GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gsets, Vlong* md_counts){
   GenotypesSet* cleaned_gtsset = construct_genotypesset(copy_of_accids, cleaned_marker_ids, cleaned_gsets, cleaned_md_counts);
+   set_accession_missing_data_counts(cleaned_gtsset);
   return cleaned_gtsset;
 }
 
 void set_accession_missing_data_counts(GenotypesSet* the_gtsset){
+  // fprintf(stderr, "In set_accession_missing_data_counts. \n");
   for(long i=0; i<the_gtsset->accession_ids->size; i++){
     long md_count = 0;
    char* the_gtsstr = the_gtsset->genotype_sets->a[i];
@@ -160,6 +162,7 @@ void set_accession_missing_data_counts(GenotypesSet* the_gtsset){
 	md_count++;
       }
     }
+    //  fprintf(stderr, "acc index: %ld, md_count: %ld\n", i, md_count);
     the_gtsset->accession_missing_data_counts->a[i] = md_count;
   }
 }

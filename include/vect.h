@@ -25,6 +25,12 @@ typedef struct{
 } Vstr;
 
 typedef struct{
+  long capacity;
+  long length; // length of the string not including term. null
+  char* a; // a regular null-terminated string
+}Vchar; 
+
+typedef struct{
   long index;
   char* id;
 } IndexId;
@@ -57,6 +63,12 @@ char* ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last 
 char* copy_ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last element, etc.
 void print_vstr(FILE* fh, Vstr* the_vstr);
 void free_vstr(Vstr* the_vstr); // free memory
+
+// *****  Vchar  *****
+Vchar* construct_vchar(long cap);
+Vchar* append_str_to_vchar(Vchar* the_vchar, char* str);
+void print_vchar(FILE* fh, Vchar* the_vchar);
+void free_vchar(Vchar* the_vchar);
 
 // *****  IndexId  *****
 IndexId* construct_indexid(long idx, char* id);

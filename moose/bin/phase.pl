@@ -1,9 +1,12 @@
 #!/usr/bin/perl -w
 use strict;
+use List::Util qw(min max sum);
 
-my $pedigree_test_filename = shift; # file with acc_id bad_count mat_id pat_id ...
+my $pedigree_test_filename = shift; # file with:   acc_id  bad_count  mat_id  pat_id  ...
 
 my $n_sites_to_print_on_line = shift // 0;
+
+my $max_bad = shift // 6;
 
 open my $fhp, "<", "$pedigree_test_filename";
 my %parentalidpair_offspringidstr = ();
@@ -17,7 +20,7 @@ while (my $line = <$fhp>) {
 
 my @marker_ids;
 my %id_genotypes = ();
-while (my $line = <>) {		# out_genotypes file
+while (my $line = <>) {	# out_genotypes file; each line like:  acc_id  0010120001201310...
   next if($line =~ /^\s*#/);
   if ($line =~ /^MARKER/) {
     @marker_ids = split(" ", $line);
@@ -33,12 +36,40 @@ while (my($paridpair, $progstr) = each %parentalidpair_offspringidstr) {
   my ($p1id, $p2id) = split(" ", $paridpair);
   my $p1gts = $id_genotypes{$p1id};
   my $p2gts = $id_genotypes{$p2id};
+
+  my @offspringids = split(" ", $progstr);
+  my @prog_0counts = ();
+  my @prog_1counts = ();
+  my @prog_2counts = ();
+  my @prog_mdcounts = ();
+  for my $offid (@offspringids) {
+    my $offgts = $id_genotypes{$offid};
+    for (my $i = 0; $i < length $offgts; $i++) {
+      my $offgt = substr($offgts, $i, 1);
+      if ($offgt eq '0') {
+	$prog_0counts[$i]++;
+      } elsif ($offgt eq '1') {
+	$prog_1counts[$i]++;
+      } elsif ($offgt eq '2') {
+	$prog_2counts[$i]++;
+      } elsif ($offgt eq '3') {	# missing data
+	$prog_mdcounts[$i]++;
+      } else {
+	die "gt is $offgt (should be 0,1,2, or 3)\n";
+      }
+    }
+  }
+
   my @p1heterozyg_indices = ();
   my @p2subset_gts = ();
   for (my $i=0; $i<length $p1gts; $i++) {
     if (substr($p1gts, $i, 1) eq '1') {
       my $p2gt = substr($p2gts, $i, 1);
-      if ($p2gt eq '0'  or  $p2gt eq '2') {
+      if (
+	  ($p2gt eq '0'  and  ($prog_2counts[$i] // 0) < $max_bad)
+	  or
+	  ($p2gt eq '2'  and  ($prog_0counts[$i] // 0) < $max_bad)
+	 ) {
 	push @p1heterozyg_indices, $i;
 	push @p2subset_gts, $p2gt;
       }
@@ -60,26 +91,19 @@ while (my($paridpair, $progstr) = each %parentalidpair_offspringidstr) {
   my @md2_counts = ();
   my @impossible2_counts = ();
 
-  my @offspringids = split(" ", $progstr);
+  
+
+  my $n_p1het_p2hom = scalar @p1heterozyg_indices;
 
   for my $offid (@offspringids) {
     my $offgts = $id_genotypes{$offid};
-    for (my $i=0; $i < (scalar @p1heterozyg_indices - 2); $i++) {
+    for (my $i=0; $i < scalar @p1heterozyg_indices; $i++) {
 
       my $j1 = $p1heterozyg_indices[$i];
-      my $j2 = $p1heterozyg_indices[$i+1];
-      my $j3 =  $p1heterozyg_indices[$i+2];
-    
       my $p2gt1 = $p2subset_gts[$i];
-      my $p2gt2 = $p2subset_gts[$i+1];
-      my $p2gt3 = $p2subset_gts[$i+2];
-    
       my $offgt1 = substr($offgts, $j1, 1);
-      my $offgt2 = substr($offgts, $j2, 1);
-      my $offgt3 = substr($offgts, $j3, 1);
-    
-      if ($offgt1 eq '0') {
 
+      if ($offgt1 eq '0') {
 	$progsubset_0counts[$i]++;
       } elsif ($offgt1 eq '1') {
 	$progsubset_1counts[$i]++;
@@ -88,12 +112,19 @@ while (my($paridpair, $progstr) = each %parentalidpair_offspringidstr) {
       } else {			# missing data
 	$progsubset_mdcounts[$i]++;
       }
-
-     
-      increment_cis_trans_etc($i, $p2gt1, $p2gt2, $offgt1, $offgt2, \@cis_counts, \@trans_counts, \@impossible_counts, \@md_counts);
-        increment_cis_trans_etc($i+1, $p2gt1, $p2gt3, $offgt1, $offgt3, \@cis2_counts, \@trans2_counts, \@impossible2_counts, \@md2_counts);
-      
-    
+      if ($i < ($n_p1het_p2hom - 1)) {
+	my $j2 = $p1heterozyg_indices[$i+1];
+	my $p2gt2 = $p2subset_gts[$i+1];
+        my $offgt2 = substr($offgts, $j2, 1);
+	increment_cis_trans_etc($i, $p2gt1, $p2gt2, $offgt1, $offgt2, \@cis_counts, \@trans_counts, \@impossible_counts, \@md_counts);
+	if ($i < ($n_p1het_p2hom - 2)) {
+	  my $j3 =  $p1heterozyg_indices[$i+2];
+	  my $p2gt3 = $p2subset_gts[$i+2];
+	  my $offgt3 = substr($offgts, $j3, 1);
+   
+	  increment_cis_trans_etc($i+1, $p2gt1, $p2gt3, $offgt1, $offgt3, \@cis2_counts, \@trans2_counts, \@impossible2_counts, \@md2_counts);
+	}
+      }
     }
   }
 
@@ -156,21 +187,34 @@ while (my($paridpair, $progstr) = each %parentalidpair_offspringidstr) {
     print("\n");
 
   } else {			# 1 line for each marker used
-
+    my $prev_marker_position_number = 0;
     while (my ($i, $j) = each @p1heterozyg_indices) {
-      printf("%-16s %4i %3i    ", $marker_ids[$j], $j, $p2subset_gts[$i]);
-      printf("%3i %3i %2i %2i   %3i %3i %2i %2i    ",
-	     $progsubset_0counts[$i] // 0, $progsubset_1counts[$i] // 0,
-	     $progsubset_2counts[$i] // 0, $progsubset_mdcounts[$i] // 0,
-	       $cis2_counts[$i] // 0, $trans2_counts[$i] // 0,
-	       $impossible2_counts[$i] // 0, $md2_counts[$i] // 0,);
-      if ($i < scalar @p1heterozyg_indices -1) {
-#	printf("\n%45s", " ");
-	printf("%3i %3i %2i %2i  \n", 
-	       $cis_counts[$i] // 0, $trans_counts[$i] // 0,
-	       $impossible_counts[$i] // 0, $md_counts[$i] // 0
-	      );
+      my $marker_id = $marker_ids[$j];
+      my $marker_position_number = ($marker_id =~ /[:](\d+)/)? $1 : 0;
+      
+      printf("%-16s %8ld %4i %3i    ", $marker_id,
+	     $marker_position_number - $prev_marker_position_number, $j, $p2subset_gts[$i]);
+      if ($p2subset_gts[$i] == '0') {
+	printf("%3i %3i %2i %2i   ",
+	       $progsubset_0counts[$i] // 0, $progsubset_1counts[$i] // 0,
+	       $progsubset_2counts[$i] // 0, $progsubset_mdcounts[$i] // 0);
+      } else {
+	printf("%3i %3i %2i %2i   ",
+	       $progsubset_2counts[$i] // 0, $progsubset_1counts[$i] // 0,
+	       $progsubset_0counts[$i] // 0, $progsubset_mdcounts[$i] // 0);
       }
+
+      my ($cis1_count, $trans1_count) = ($cis_counts[$i] // 0, $trans_counts[$i] // 0);
+      my ($cis2_count, $trans2_count) = ($cis2_counts[$i] // 0, $trans2_counts[$i] // 0);
+      printf("%3i %3i %2i %2i %3i   %3i %3i %2i %2i %3i  \n",
+	     $cis1_count, $trans1_count, 
+	     $impossible_counts[$i] // 0, $md_counts[$i] // 0,
+	     min($cis1_count, $trans1_count),
+	     
+	     $cis2_count, $trans2_count, 
+	     $impossible2_counts[$i] // 0, $md2_counts[$i] // 0,
+	       min($cis2_count, $trans2_count) );
+      $prev_marker_position_number = $marker_position_number;
     }
     print("\n");
 

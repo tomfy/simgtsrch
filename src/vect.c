@@ -145,6 +145,37 @@ void free_vstr(Vstr* the_vstr){
   free(the_vstr);
 }
 
+// *****  Vchar  *****
+Vchar* construct_vchar(long cap){ // 
+  Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
+  if(cap < 1) cap = 1;
+    the_vchar->a = (char*)malloc(cap*sizeof(char));
+  the_vchar->capacity = cap;
+    the_vchar->a[0] = '\0'; 
+    the_vchar->length = 0; // this is the length of the string stored, NOT including the terminating null.
+    return the_vchar;
+}
+
+// ***** append a string to vchar after enlarging capacity with realloc if needed *****
+Vchar* append_str_to_vchar(Vchar* the_vchar, char* str){
+  long str_len = (long)strlen(str);
+  long cap = the_vchar->capacity;
+  long new_size = the_vchar->length + str_len + 1; // includes term. null; new cap must be >= new_size.
+  if(new_size > cap){
+    long new_cap = (2*cap > new_size)? 2*cap : new_size;
+    the_vchar->a = (char*)realloc(the_vchar->a, new_cap*sizeof(char));
+  }
+  the_vchar->a = strcat(the_vchar->a, str);   
+  return the_vchar;
+}
+void print_vchar(FILE* fh, Vchar* the_vchar){
+  fprintf(fh, "%s", the_vchar->a);
+}
+void free_vchar(Vchar* the_vchar){
+  free(the_vchar->a);
+  free(the_vchar);
+}
+
 // *****  IndexId *****
 IndexId* construct_indexid(long idx, char* id){
   IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId));
