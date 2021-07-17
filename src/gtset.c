@@ -2,10 +2,36 @@
 
 extern int do_checks_flag; // option -c sets this to 1 to do some checks.
 
+// *****  Accession  implementation *****
+Accession* construct_accession(char* id, long idx, char* genotypes){
+  Accession* the_accession = (Accession*)malloc(1*sizeof(Accession));
+  the_accession->id = construct_vchar_from_str(id);
+  the_accession->index = idx;
+  the_accession->genotypes = construct_vchar_from_str(genotypes);
+  return the_accession;
+}
+void set_accession_missing_data_count(Accession* the_accession, long missing_data_count){
+  the_accession->missing_data_count = missing_data_count;
+}
+void free_accession(Accession* the_accession){
+  free_accession_innards(the_accession);
+  free(the_accession);
+}
+void free_accession_innards(Accession* the_accession){ // doesn't free the_accession itself
+  // use to free each element of an array of Accession (not an array of Accession*)
+  free_vchar(the_accession->id);
+  free_vchar(the_accession->genotypes);
+}
+
+
+// *****  GenotypesSet implementation *****
 GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double max_missing_data_fraction){
   char* line = NULL;
   size_t len = 0;
   ssize_t nread;
+
+  long accessions_capacity = 10000;
+  Accession* the_accessions = (Accession*)malloc(accessions_capacity*sizeof(Accession)); 
 
   long markerid_count = 0;
   Vstr* marker_ids = construct_vstr(1000);
@@ -35,13 +61,14 @@ GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double
   long* missing_data_counts = (long*)calloc(markerid_count, sizeof(long));
   Vlong* the_md_vlong = construct_vlong_from_array(markerid_count, missing_data_counts);
   while((nread = getline(&line, &len, g_stream)) != -1){
-    accession_count++;
+  
     char* token = strtok_r(line, "\t \n\r", &saveptr);
     //printf("accession number: %ld id: %s\n", accession_count, token);
     char* acc_id = (char*)malloc((strlen(token)+1)*sizeof(char));
     add_string_to_vstr(accession_ids, strcpy(acc_id, token)); // store copy of accession id
     //  printf("%s  ", token);
     long marker_count = 0;
+    long accession_missing_data_count = 0;
     char* genotypes = (char*)malloc((markerid_count+1) * sizeof(char));
     genotypes[markerid_count] = '\0'; // terminate with null.
     while(1){
@@ -58,17 +85,34 @@ GenotypesSet* read_genotypes_file_and_store(FILE* g_stream, double delta, double
       }else{ // missing data
 	genotypes[marker_count] = '3';
 	missing_data_counts[marker_count]++;
+	accession_missing_data_count++;
       }
       marker_count++;
     } // done reading dosages for all markers, and rounding to 0, 1, 2, 3
     add_string_to_vstr(genotypes_strings, genotypes);
     if(marker_count != markerid_count) exit(EXIT_FAILURE);
     // printf("%s\n", genotypes);
+    the_accessions[accession_count].id = construct_vchar_from_str(acc_id);
+    the_accessions[accession_count].genotypes = construct_vchar_from_str(genotypes);
+    the_accessions[accession_count].missing_data_count = accession_missing_data_count;
+    accession_count++;
   } // done reading all lines
   
   free(line); // only needs to be freed once.
   GenotypesSet* the_genotypes_set = construct_genotypesset(accession_ids, marker_ids, genotypes_strings, the_md_vlong);
+
+  the_genotypes_set->accessions = the_accessions;
+  the_genotypes_set->capacity = accessions_capacity;
   return the_genotypes_set;
+}
+
+void check_gtsset(GenotypesSet* gtsset){
+  for(long i=0; i<gtsset->n_accessions; i++){
+    //  fprintf(stderr, "id(old): %s \n", gtsset->accession_ids->a[i]);
+    //  fprintf(stderr, "id(new): %s \n", gtsset->accessions[i].id->a);
+    assert(strcmp(gtsset->accessions[i].id->a, gtsset->accession_ids->a[i]) == 0);
+    assert(strcmp(gtsset->accessions[i].genotypes->a, gtsset->genotype_sets->a[i]) == 0);
+  }  
 }
 
 GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gsets, Vlong* md_counts){
@@ -109,6 +153,7 @@ GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double ma
   Vstr* gsets = the_gtsset->genotype_sets;
   Vlong* md_counts = the_gtsset->marker_missing_data_counts;
 
+
   // identify the markers to keep:
   long n_markers_to_keep = 0;
   Vlong* md_ok = construct_vlong_zeroes(md_counts->size);
@@ -126,29 +171,51 @@ GenotypesSet* construct_cleaned_genotypesset(GenotypesSet* the_gtsset, double ma
   }
   // fprintf(stderr, "after 1st loop\n");
   //GenotypesSet* the_cleaned_gtsset = (GenotypesSet*)malloc(sizeof(GenotypesSet));
+
+  Accession* the_accessions = (Accession*)malloc(the_gtsset->n_accessions*sizeof(Accession)); 
+
   Vstr* copy_of_accids = construct_vstr_copy(the_gtsset->accession_ids);
   Vstr* cleaned_gsets = construct_vstr(the_gtsset->n_accessions);
   for(long i=0; i<gsets->size; i++){ // loop over accessions
     char* raw_gts = gsets->a[i]; // the string with all the genotypes for accession i
     char* cleaned_gts = (char*)malloc((n_markers_to_keep+1)*sizeof(char));
+    char* cleaned_gts2 = (char*)malloc((n_markers_to_keep+1)*sizeof(char));
     // char* cleaned_marker_ids = (char*)malloc((n_markers_to_keep+1)*sizeof(char));
     long k=0; // k: index of kept markers
+    long acc_md_count = 0;
     for(long j=0; j<the_gtsset->n_markers; j++){ // j: index of original markers
       if(md_ok->a[j] == 1){
 	cleaned_gts[k] = raw_gts[j];
+	cleaned_gts2[k] = raw_gts[j];
 	//	long len = strlen(the_gtsset->marker_ids[j]);
 	// cleaned_marker_ids[k] = strcpy((char*)malloc((len+1)*sizeof(char), the_gtsset->marker_ids[j]);
 	k++;
+	if(raw_gts[j] == '3') acc_md_count++;
       }
     }
     cleaned_gts[k] = '\0'; // terminate with null.
+    cleaned_gts2[k] = '\0';
     add_string_to_vstr(cleaned_gsets, cleaned_gts);
+    // free(the_gtsset->accessions[i].genotypes->a);
+   
     if(DBUG && do_checks_flag) assert(k == n_markers_to_keep);
+
+    the_accessions[i].id = construct_vchar_from_str(the_gtsset->accessions[i].id->a);
+    the_accessions[i].index = i; 
+    the_accessions[i].genotypes = construct_vchar_from_str(cleaned_gts2);
+    the_accessions[i].missing_data_count = acc_md_count;
+    free(cleaned_gts2);
   }
   free_vlong(md_ok);
   //  GenotypesSet* construct_genotypesset(Vstr* acc_ids, Vstr* marker_ids, Vstr* gsets, Vlong* md_counts){
   GenotypesSet* cleaned_gtsset = construct_genotypesset(copy_of_accids, cleaned_marker_ids, cleaned_gsets, cleaned_md_counts);
-   set_accession_missing_data_counts(cleaned_gtsset);
+  set_accession_missing_data_counts(cleaned_gtsset);
+
+   cleaned_gtsset->accessions = the_accessions;
+  cleaned_gtsset->capacity = the_gtsset->n_accessions;
+
+  // the_gtsset->accessions[i].genotypes->a = cleaned_gts2;
+  fprintf(stderr, "about to return cleaned_gtsset \n");
   return cleaned_gtsset;
 }
 
@@ -156,13 +223,13 @@ void set_accession_missing_data_counts(GenotypesSet* the_gtsset){
   // fprintf(stderr, "In set_accession_missing_data_counts. \n");
   for(long i=0; i<the_gtsset->accession_ids->size; i++){
     long md_count = 0;
-   char* the_gtsstr = the_gtsset->genotype_sets->a[i];
+    char* the_gtsstr = the_gtsset->genotype_sets->a[i];
     for(long j=0; the_gtsstr[j] != '\0'; j++){
       if(the_gtsstr[j] == '3'){
 	md_count++;
       }
     }
-    //  fprintf(stderr, "acc index: %ld, md_count: %ld\n", i, md_count);
+    //  fprintf(stderr, "accid %s acc index: %ld, md_count: %ld\n", the_gtsset->accession_ids->a[i], i, md_count);
     the_gtsset->accession_missing_data_counts->a[i] = md_count;
   }
 }
@@ -188,5 +255,10 @@ void free_genotypesset(GenotypesSet* the_gtsset){
   free_vstr(the_gtsset->genotype_sets);
   free_vlong(the_gtsset->accession_missing_data_counts);
   free_vlong(the_gtsset->marker_missing_data_counts);
+  fprintf(stderr, "n_accessions: %ld \n", the_gtsset->n_accessions);
+  for(long i=0; i<the_gtsset->n_accessions; i++){
+    free_accession_innards(the_gtsset->accessions+i);
+  }
+  free(the_gtsset->accessions);
   free(the_gtsset);
 }

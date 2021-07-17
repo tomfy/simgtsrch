@@ -129,8 +129,9 @@ main(int argc, char *argv[])
   fclose(g_stream);
 
   print_genotypesset_summary_info(stderr, the_genotypes_set);
+   
   if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
-  
+  check_gtsset(the_genotypes_set);
   long n_accessions = the_genotypes_set->n_accessions;
   long n_markers_all = the_genotypes_set->n_markers;
   
@@ -140,61 +141,64 @@ main(int argc, char *argv[])
   Vidxid* the_vidxid = construct_sorted_vidxid_from_vstr(the_genotypes_set->accession_ids);
   fprintf(stderr, "# Time to set up id index map: %lf \n", hi_res_time() - t_start);
  
-
-  // ***************  read the pedigrees file  ***************************
-
+  // *****  clean genotypes set, i.e. remove markers with high missing data  ****
   t_start = hi_res_time();
-  Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid);
+  GenotypesSet* the_cleaned_genotypes_set = construct_cleaned_genotypesset(the_genotypes_set, max_marker_missing_data);
+    check_gtsset(the_cleaned_genotypes_set);
+  long n_markers_good = the_cleaned_genotypes_set->n_markers;
+  free_genotypesset(the_genotypes_set); // free the raw genotypes set; use the cleaned one.
+  print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
+
+  // print_genotypesset(the_cleaned_genotypes_set);
+ 
+  if(DBUG && do_checks_flag) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
+  fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %lf sec.\n",
+	  n_markers_good, hi_res_time() - t_start);
+  
+  // ***************  read the pedigrees file  ***************************
+  t_start = hi_res_time();
+  Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid, the_cleaned_genotypes_set);
   fclose(p_stream);
   fprintf(stderr, "# Done reading pedigree file. Stored %ld pedigrees. Time: %lf sec.\n",
 	  pedigrees->size, hi_res_time() - t_start);
 
  
   // ***************  Done reading input files  ******************************
-  
-
-  // *****  clean genotypes set, i.e. remove markers with high missing data  ****
-  t_start = hi_res_time();
-  GenotypesSet* the_cleaned_genotypes_set = construct_cleaned_genotypesset(the_genotypes_set, max_marker_missing_data);
-  
-  long n_markers_good = the_cleaned_genotypes_set->n_markers;
-  free_genotypesset(the_genotypes_set);
-  print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
-  // print_genotypesset(the_cleaned_genotypes_set);
- 
-  if(DBUG && do_checks_flag) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
-  fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %lf sec.\n",
-	  n_markers_good, hi_res_time() - t_start);
 
    Vlong* parent_idxs = accessions_with_offspring(pedigrees, n_accessions);
-  for(long i=0; i<parent_idxs->size; i++){
-      printf("index of accession with offspring: %ld\n", parent_idxs->a[i]);
-  }
+  /* for(long i=0; i<parent_idxs->size; i++){ */
+  /*     printf("index of accession with offspring: %ld\n", parent_idxs->a[i]); */
+  /* } */
 
   t_start = hi_res_time();
   for(long i=0; i<pedigrees->size; i++){
-     if(i % 100  == 0){
+    if(i % 100  == 0){
       fprintf(stderr, "# Done testing %ld pedigrees.\n", i);
     }
-    Pedigree_stats* the_pedigree_stats = calculate_pedigree_stats(pedigrees->a[i], the_cleaned_genotypes_set);
-    fprintf(o_stream, "%s %s %s  ", pedigrees->a[i]->Accession->id, pedigrees->a[i]->Fparent->id, pedigrees->a[i]->Mparent->id);
-    print_pedigree_stats(o_stream, the_pedigree_stats);
-    //  print_pedigree_test_info(o_stream, pedigrees->a[i], the_cleaned_genotypes_set, parent_idxs);
-     print_pedigree_alternatives(o_stream, pedigrees->a[i], the_cleaned_genotypes_set, parent_idxs);
-     fprintf(o_stream, "\n");
+    Pedigree_stats* the_pedigree_stats = calculate_pedigree_stats(pedigrees->a[i]); //, the_cleaned_genotypes_set);
+    // assert(strcmp(pedigrees->a[i]->Accession->id, pedigrees->a[i]->A->id->a) == 0);
+    fprintf(o_stream, "%s  %ld  %s %s  ",
+	    pedigrees->a[i]->A->id->a, pedigrees->a[i]->A->missing_data_count,
+	    pedigrees->a[i]->F->id->a, pedigrees->a[i]->M->id->a);
+    print_pedigree_stats(o_stream, the_pedigree_stats); 
+    print_pedigree_alternatives(o_stream, pedigrees->a[i], the_cleaned_genotypes_set, parent_idxs);
+    fprintf(o_stream, "\n");
+    free(the_pedigree_stats);
+    // if(i == 500) break; // for testing purposes only.
   }
   
   fprintf(stderr, "# Done checking %ld pedigrees. Time: %lf sec.\n",
 	  pedigrees->size, hi_res_time() - t_start);
 
-  
-
   // ********************  cleanup  **************************
   t_start = hi_res_time();
   fclose(o_stream);
   free_genotypesset(the_cleaned_genotypes_set);
+  fprintf(stderr, "after free_genotypesset\n");
   free_vidxid(the_vidxid);
   free_vpedigree(pedigrees);
+   fprintf(stderr, "after free_vpedigree\n");
+   free_vlong(parent_idxs);
   fprintf(stderr, "# Done with cleanup. Time %lf sec.\n", hi_res_time() - t_start);
   // getchar();
 }

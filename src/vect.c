@@ -149,11 +149,19 @@ void free_vstr(Vstr* the_vstr){
 Vchar* construct_vchar(long cap){ // 
   Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
   if(cap < 1) cap = 1;
-    the_vchar->a = (char*)malloc(cap*sizeof(char));
+  the_vchar->a = (char*)malloc(cap*sizeof(char));
   the_vchar->capacity = cap;
-    the_vchar->a[0] = '\0'; 
-    the_vchar->length = 0; // this is the length of the string stored, NOT including the terminating null.
-    return the_vchar;
+  the_vchar->a[0] = '\0'; 
+  the_vchar->length = 0; // this is the length of the string stored, NOT including the terminating null.
+  return the_vchar;
+}
+
+Vchar* construct_vchar_from_str(char* str){
+  Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
+  the_vchar->length = (long)strlen(str);
+  the_vchar->capacity = the_vchar->length+1;
+  the_vchar->a = strcpy((char*)malloc(the_vchar->capacity*sizeof(char)), str);
+  return the_vchar;
 }
 
 // ***** append a string to vchar after enlarging capacity with realloc if needed *****

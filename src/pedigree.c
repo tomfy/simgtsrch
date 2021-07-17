@@ -28,13 +28,21 @@ void print_Ahrx(FILE* fh, Ahr the_ahr){
 }
 
 // *****  Pedigree  *****
-Pedigree* construct_pedigree(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid){
+Pedigree* construct_pedigree(Accession* Acc, Accession* Fparent, Accession* Mparent){ //IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid){
   Pedigree* the_pedigree = (Pedigree*)malloc(sizeof(Pedigree));
-  the_pedigree->Fparent = fempar_idxid;
-  the_pedigree->Mparent = malpar_idxid;
-  the_pedigree->Accession = acc_idxid;
+  the_pedigree->F = Fparent;
+  the_pedigree->M = Mparent;
+  the_pedigree->A = Acc;
   return the_pedigree;
 }
+
+/* Pedigree* construct_pedigree_from_idxids(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid){ */
+/*   Pedigree* the_pedigree = (Pedigree*)malloc(sizeof(Pedigree)); */
+/*   the_pedigree->Fparent = fempar_idxid; */
+/*   the_pedigree->Mparent = malpar_idxid; */
+/*   the_pedigree->Accession = acc_idxid; */
+/*   return the_pedigree; */
+/* } */
 
 void agmr_hgmr_r(char* gts1, char* gts2, Ahr* the_ahr){
   char c1, c2;
@@ -119,7 +127,7 @@ double hgmr(char* gts1, char* gts2){
     }
     i++;
   }
-  return (n_denom > 0)? (double)n_numer/(double)n_denom : -1.0;  
+  return (n_denom > 0)? (double)n_numer/(double)n_denom : 2.0;  
 }
 
 void triple_counts_x(char* gts1, char* gts2, char* proggts){
@@ -732,14 +740,10 @@ Pedigree_stats* triple_counts_z(char* gts1, char* gts2, char* proggts){ // Pedig
 /*   agmr_hgmr_r(fempar_gts, malpar_gts, &(the_pedigree->fm_ahr)); */
 /* } */
 
-Pedigree_stats* calculate_pedigree_stats(Pedigree* the_pedigree, GenotypesSet* the_gtsset){
-
-  char* fempar_gts = the_gtsset->genotype_sets->a[the_pedigree->Fparent->index];
-  char* malpar_gts = the_gtsset->genotype_sets->a[the_pedigree->Mparent->index];
-  char* acc_gts = the_gtsset->genotype_sets->a[the_pedigree->Accession->index];
-
-  Pedigree_stats* the_pedigree_stats = triple_counts_z(fempar_gts, malpar_gts, acc_gts);
-  return the_pedigree_stats;
+Pedigree_stats* calculate_pedigree_stats(Pedigree* the_pedigree){ //, GenotypesSet* the_gtsset){
+  return triple_counts_z(the_pedigree->F->genotypes->a,
+			 the_pedigree->M->genotypes->a,
+			 the_pedigree->A->genotypes->a);			 
 }
 
 
@@ -747,9 +751,10 @@ Vlong* accessions_with_offspring(Vpedigree* the_vped, long n_accessions){
   Vlong* offspring_counts = construct_vlong_zeroes(n_accessions);
   for(long i=0; i<the_vped->size; i++){
     Pedigree* the_ped = the_vped->a[i];
-    long fp_index = the_ped->Fparent->index;
+    // fprintf(stderr, "%ld %ld \n", the_ped->F->index, the_ped->Fparent->index);
+    long fp_index = the_ped->F->index; // Fparent->index;
     offspring_counts->a[fp_index]++;
-    long mp_index = the_ped->Mparent->index;
+    long mp_index = the_ped->M->index; // parent->index;
     offspring_counts->a[mp_index]++; 
   }
   Vlong* accids_with_offspring = construct_vlong(100);
@@ -762,27 +767,27 @@ Vlong* accessions_with_offspring(Vpedigree* the_vped, long n_accessions){
   return accids_with_offspring;
 }
 
-void print_pedigree_test_info(FILE* fh, Pedigree* the_pedigree, GenotypesSet* the_gtsset, Vlong* parent_idxs){
+/* void print_pedigree_test_info(FILE* fh, Pedigree* the_pedigree, GenotypesSet* the_gtsset, Vlong* parent_idxs){ */
 
-  char* acc_id = the_pedigree->Accession->id;
-  long acc_idx = the_pedigree->Accession->index;
-  long fparent_idx = the_pedigree->Fparent->index;
-  long mparent_idx = the_pedigree->Mparent->index;
-  Vlong* best_parent_candidates = construct_vlong(10);
-  add_long_to_vlong(best_parent_candidates, fparent_idx);
-  add_long_to_vlong(best_parent_candidates, mparent_idx);
+/*   char* acc_id = the_pedigree->Accession->id; */
+/*   long acc_idx = the_pedigree->Accession->index; */
+/*   long fparent_idx = the_pedigree->Fparent->index; */
+/*   long mparent_idx = the_pedigree->Mparent->index; */
+/*   Vlong* best_parent_candidates = construct_vlong(10); */
+/*   add_long_to_vlong(best_parent_candidates, fparent_idx); */
+/*   add_long_to_vlong(best_parent_candidates, mparent_idx); */
 
-  fprintf(fh, "%-20s %4ld %-20s %-20s  ",
-	  the_gtsset->accession_ids->a[acc_idx],
-	  the_gtsset->accession_missing_data_counts->a[the_pedigree->Accession->index],
-	  the_gtsset->accession_ids->a[fparent_idx],
-	  the_gtsset->accession_ids->a[mparent_idx]
-	  );
+/*   fprintf(fh, "%-20s %4ld %-20s %-20s  ", */
+/* 	  the_gtsset->accession_ids->a[acc_idx], */
+/* 	  the_gtsset->accession_missing_data_counts->a[the_pedigree->Accession->index], */
+/* 	  the_gtsset->accession_ids->a[fparent_idx], */
+/* 	  the_gtsset->accession_ids->a[mparent_idx] */
+/* 	  ); */
 
-  print_Ahrx(fh, the_pedigree->fp_ahr); fprintf(fh, "   ");
-  print_Ahrx(fh, the_pedigree->mp_ahr); fprintf(fh, "   ");
-  //  print_Ahr(fh, the_pedigree->fm_ahr); fprintf(fh, "   ");
-}
+/*   print_Ahrx(fh, the_pedigree->fp_ahr); fprintf(fh, "   "); */
+/*   print_Ahrx(fh, the_pedigree->mp_ahr); fprintf(fh, "   "); */
+/*   //  print_Ahr(fh, the_pedigree->fm_ahr); fprintf(fh, "   "); */
+/* } */
 
 void print_pedigree_stats(FILE* fh, Pedigree_stats* the_pedigree_stats){
   fprintf(fh, "%6.5lf ", (the_pedigree_stats->par1_hgmr.d > 0)? (double)the_pedigree_stats->par1_hgmr.n/(double)the_pedigree_stats->par1_hgmr.d : 2);
@@ -797,124 +802,97 @@ double get_hgmr1(Pedigree_stats* p){
   return (p->par1_hgmr.d > 0)? (double)p->par1_hgmr.n/(double)p->par1_hgmr.d : 2;
 } 
 double get_r1(Pedigree_stats* p){
-   return (p->par1_r.d > 0)? (double)p->par1_r.n/(double)p->par1_r.d : 2;
+  return (p->par1_r.d > 0)? (double)p->par1_r.n/(double)p->par1_r.d : 2;
 }
 double get_hgmr2(Pedigree_stats* p){
   return (p->par2_hgmr.d > 0)? (double)p->par2_hgmr.n/(double)p->par2_hgmr.d : 2;
 } 
 double get_r2(Pedigree_stats* p){
-   return (p->par2_r.d > 0)? (double)p->par2_r.n/(double)p->par2_r.d : 2;
+  return (p->par2_r.d > 0)? (double)p->par2_r.n/(double)p->par2_r.d : 2;
 } 
 double get_d1(Pedigree_stats* p){
- return (p->d1.d > 0)? (double)p->d1.n/(double)p->d1.d : 2;
+  return (p->d1.d > 0)? (double)p->d1.n/(double)p->d1.d : 2;
 }
 double get_d2(Pedigree_stats* p){
- return (p->d2.d > 0)? (double)p->d2.n/(double)p->d2.d : 2;
+  return (p->d2.d > 0)? (double)p->d2.n/(double)p->d2.d : 2;
 }
 
-void print_pedigree_alternatives(FILE* fh, Pedigree* the_pedigree, GenotypesSet* the_gtsset, Vlong* parent_idxs){
-    long n_parents = parent_idxs->size;
+void print_pedigree_alternatives(FILE* fh, Pedigree* the_pedigree, const GenotypesSet* const the_gtsset, Vlong* parent_idxs){
+  long n_parents = parent_idxs->size;
 
-     char* acc_id = the_pedigree->Accession->id;
-  long acc_idx = the_pedigree->Accession->index;
-  long fparent_idx = the_pedigree->Fparent->index;
-  long mparent_idx = the_pedigree->Mparent->index;
-  Vlong* best_parent_candidates = construct_vlong(10);
-  add_long_to_vlong(best_parent_candidates, fparent_idx);
-  if(mparent_idx != fparent_idx) add_long_to_vlong(best_parent_candidates, mparent_idx);
+  char* acc_id = the_pedigree->A->id->a; //Accession->id;
+  long acc_idx = the_pedigree->A->index; // Accession->index;
+  char* acc_gts = the_pedigree->A->genotypes->a; // the_gtsset->genotype_sets->a[the_pedigree->Accession->index];
+  long fparent_idx = the_pedigree->F->index; //Fparent->index;
+  char* fparent_gts = the_pedigree->F->genotypes->a; // the_gtsset->genotype_sets->a[fparent_idx];
+  long mparent_idx = the_pedigree->M->index; //  Mparent->index;
+  char* mparent_gts = the_pedigree->M->genotypes->a; // the_gtsset->genotype_sets->a[mparent_idx];
+
+  
+  Vlong* best_parent_candidate_idxs = construct_vlong(10); 
+  add_long_to_vlong(best_parent_candidate_idxs, fparent_idx); // add female parent (from pedigree)
+  if(mparent_idx != fparent_idx) add_long_to_vlong(best_parent_candidate_idxs, mparent_idx); // add male parent (from pedigree) if distinct
+
+  // sort accession indices by hgmr   
   Idxhgmr* the_idxhgmrs = (Idxhgmr*)malloc(n_parents*sizeof(Idxhgmr));
-  char* acc_gts = the_gtsset->genotype_sets->a[the_pedigree->Accession->index];
   for(long i=0; i<parent_idxs->size; i++){
     long idx = parent_idxs->a[i];
-    char* pgts = the_gtsset->genotype_sets->a[idx];
-    //   agmr_hgmr_r(gts1, gts2, &the_ahr);
-    //  double the_hgmr = hgmr(gts1, gts2); //(the_ahr.h.d > 0)? (double)the_ahr.h.n/(double)the_ahr.h.d : -1.0;
+    char* pgts = the_gtsset->accessions[idx].genotypes->a; // genotype_sets->a[idx];
     the_idxhgmrs[i].idx = idx;
     the_idxhgmrs[i].hgmr = hgmr(acc_gts, pgts); //the_hgmr; //the_idxhgmr = {idx, the_hgmr);
   }
-  //  fprintf(stderr, "just before sort idxhgmr\n");
   sort_idxhgmr_by_hgmr(n_parents, the_idxhgmrs);
-  //  fprintf(stderr, "just after sort idxhgmr\n");
-  long n_printed = 0;
-  long hgmr_ge0_count = 0;
-  long fpar_rank = -1;
-  long mpar_rank = -1;
-  //char alternative_candidates[4000];
-  //  Vstr* alt_candidates = construct_vstr(100);
-  for(long i=0; i<n_parents; i++){
+ 
+  for(long i=0; i<n_parents; i++){ // store 'good' hgmr indices 
     long the_idx = the_idxhgmrs[i].idx;
     if(the_idx != acc_idx){
       double the_hgmr = the_idxhgmrs[i].hgmr;
       if(the_hgmr >= 0.06) break; 
       if(the_hgmr >= 0){
-	hgmr_ge0_count++;
-	long is_a_parent = 0;
-	if(the_idx == fparent_idx){
-	  fpar_rank = hgmr_ge0_count;
-	  is_a_parent = 1;
-	}
-	if(the_idx == mparent_idx){
-	  mpar_rank = hgmr_ge0_count;
-	  is_a_parent = 1;
-	}
-	if(is_a_parent == 0){
-	  char* alt_cand = (char*)malloc(100*sizeof(char));
-	  /* sprintf(alt_cand, "%s %7.5lf  ", the_gtsset->accession_ids->a[the_idx], the_hgmr); */
-	  /* add_string_to_vstr(alt_candidates, alt_cand); */
-	  add_long_to_vlong(best_parent_candidates, the_idx);
-	  n_printed++;
-	}
+	if(the_idx != fparent_idx  &&  the_idx != mparent_idx  &&  the_idx != acc_idx){
+	  add_long_to_vlong(best_parent_candidate_idxs, the_idx);
+	}     
       }
     }
   }
-  //  fprintf(fh, "%ld %ld %ld   ", n_printed, long_min(fpar_rank, mpar_rank), long_max(fpar_rank, mpar_rank));
-  long ub = long_min(best_parent_candidates->size, 8);
+  free(the_idxhgmrs);
 
-  char* fparent_gts = the_gtsset->genotype_sets->a[fparent_idx];
-  char* mparent_gts = the_gtsset->genotype_sets->a[mparent_idx];
-  //  fprintf(stderr, "# %-30s \n", acc_id);
-  /* fprintf(stderr, "   %-30s %-30s  %7.5lf %7.5lf \n", */
-  /* 	  the_gtsset->accession_ids->a[fparent_idx], the_gtsset->accession_ids->a[mparent_idx], */
-  /* 	  hgmr(fparent_gts, acc_gts), hgmr(mparent_gts, acc_gts)); */
-  //  fprintf(stderr, "   %-30s %-30s  ", the_gtsset->accession_ids->a[fparent_idx], the_gtsset->accession_ids->a[mparent_idx]);
-  /* triple_counts(the_gtsset->accession_ids->a[fparent_idx], the_gtsset->accession_ids->a[mparent_idx], */
-  /* 		  fparent_gts, mparent_gts, acc_gts, 1, 1); // fprintf(stderr, "\n"); */
+  long ub = long_min(best_parent_candidate_idxs->size, 8); // set the number of possible parents to consider.
   for(long i=0; i<ub; i++){
-    long idx1 = best_parent_candidates->a[i];
-    char* id1 = the_gtsset->accession_ids->a[idx1];
-    char* gts1 = the_gtsset->genotype_sets->a[idx1];
+    long idx1 = best_parent_candidate_idxs->a[i];
+    char* id1 = the_gtsset->accessions[idx1].id->a; // accession_ids->a[idx1];
+    char* gts1 = the_gtsset->accessions[idx1].genotypes->a; // genotype_sets->a[idx1];
     for(long j=i; j<ub; j++){
-      long idx2 = best_parent_candidates->a[j];
-      char* id2 = the_gtsset->accession_ids->a[idx2];
-      char* gts2 = the_gtsset->genotype_sets->a[idx2];
-      //  fprintf(stderr, "   %-30s %-30s  ", id1, id2);
-      //  triple_counts(id1, id2, gts1, gts2, acc_gts, 0.05, 0.015);
-      Pedigree_stats* alt_pedigree_stats = triple_counts_z(gts1, gts2, acc_gts);
-    
+      long idx2 = best_parent_candidate_idxs->a[j];
+      char* id2 = the_gtsset->accessions[idx2].id->a; // _ids->a[idx2];
+      char* gts2 = the_gtsset->accessions[idx2].genotypes->a; // the_gtsset->genotype_sets->a[idx2];
+      Pedigree_stats* alt_pedigree_stats = triple_counts_z(gts1, gts2, acc_gts);   
       if(get_hgmr1(alt_pedigree_stats) <= 0.05  && get_hgmr2(alt_pedigree_stats) <= 0.05  &&  get_d1(alt_pedigree_stats) <= 0.015){
 	fprintf(fh, "%s %s ", id1, id2);
 	print_pedigree_stats(fh, alt_pedigree_stats);
       }
-      //  fprintf(stderr, "\n");
+      free(alt_pedigree_stats);
     }
-  }// fprintf(fh, "\n");
-  
-  // fprintf(fh, "%s\n", alternative_candidates);
-  // print_vstr(fh, alt_candidates);
-  // free_vstr(alt_candidates);
+  }
+  free_vlong(best_parent_candidate_idxs);
 }
 
 
 void free_pedigree(Pedigree* the_pedigree){
-  free_indexid(the_pedigree->Fparent);
-  free_indexid(the_pedigree->Mparent);
-  free_indexid(the_pedigree->Accession);
+  //  free_indexid(the_pedigree->Fparent);
+  // free_indexid(the_pedigree->Mparent);
+  // free_indexid(the_pedigree->Accession);
+  /* fprintf(stderr, "in free_pedigree. after free_indexid's\n"); */
+  /* free_accession(the_pedigree->A); */
+  /*  fprintf(stderr, "in free_pedigree. after free_accession(A) \n"); */
+  /* free_accession(the_pedigree->F); */
+  /* free_accession(the_pedigree->M); */
   free(the_pedigree);
 }
 
 // *****  Vpedigree  *****
 
-Vpedigree* read_the_pedigrees_file_and_store(FILE* p_stream, Vidxid* the_vidxid){
+Vpedigree* read_the_pedigrees_file_and_store(FILE* p_stream, Vidxid* the_vidxid, GenotypesSet* the_gtsset){
   Vpedigree* pedigrees = construct_vpedigree(1000);
 
   char* line = NULL;
@@ -958,11 +936,25 @@ Vpedigree* read_the_pedigrees_file_and_store(FILE* p_stream, Vidxid* the_vidxid)
        ((fempar_idx = index_of_id_in_vidxid(the_vidxid, fempar_id)) != -1) &&
        ((malpar_idx = index_of_id_in_vidxid(the_vidxid, malpar_id)) != -1)
        ){
-      IndexId* acc_idxid = construct_indexid(acc_idx, acc_id);
-      IndexId* fempar_idxid = construct_indexid(fempar_idx, fempar_id);
-      IndexId* malpar_idxid = construct_indexid(malpar_idx, malpar_id);
+      /* IndexId* acc_idxid = construct_indexid(acc_idx, acc_id); */
+      /* IndexId* fempar_idxid = construct_indexid(fempar_idx, fempar_id); */
+      /* IndexId* malpar_idxid = construct_indexid(malpar_idx, malpar_id); */
+      Accession* Acc = the_gtsset->accessions + acc_idx; // id->index;
+      Accession* Fpar = the_gtsset->accessions + fempar_idx; // id->index;
+      Accession* Mpar = the_gtsset->accessions + malpar_idx; // id->index;
+      /* assert(strcmp(Acc->id->a, acc_idx) == 0); */
+      /* assert(strcmp(Fpar->id->a, fempar_idx) == 0); */
+      /* assert(strcmp(Mpar->id->a, malpar_idx) == 0); */
       //  fprintf(stderr, "pedigree has 3 valid ids: %s %s %s\n", acc_id, fempar_id, malpar_id);
-      add_pedigree_to_vpedigree(pedigrees, construct_pedigree(acc_idxid, fempar_idxid, malpar_idxid));
+     
+      const Pedigree* const a_pedigree = construct_pedigree(Acc, Fpar, Mpar);
+
+      /*  Pedigree* a_pedigree = construct_pedigree_from_idxids(acc_idxid, fempar_idxid, malpar_idxid); */
+      /* a_pedigree->A = Acc; */
+      /* a_pedigree->F = Fpar; */
+      /* a_pedigree->M = Mpar; */
+    
+      add_pedigree_to_vpedigree(pedigrees, a_pedigree);
     }
     free_vstr(fields);
   } // done reading all lines
@@ -978,7 +970,7 @@ Vpedigree* construct_vpedigree(long cap){
   the_vped->a = (Pedigree**)malloc(the_vped->capacity*sizeof(Pedigree*));
 }
   
-void add_pedigree_to_vpedigree(Vpedigree* the_vped, Pedigree* the_ped){
+void add_pedigree_to_vpedigree(Vpedigree* the_vped, const Pedigree* const the_ped){
   long cap = the_vped->capacity;
   long n = the_vped->size;
   if(n == cap){
@@ -997,7 +989,7 @@ void add_pedigree_to_vpedigree(Vpedigree* the_vped, Pedigree* the_ped){
 void free_vpedigree(Vpedigree* the_vped){
   //fprintf(stderr, "in free_vpedigree. size: %ld\n", the_vped->size);
   for(long i=0; i<the_vped->size; i++){
-    //fprintf(stderr, "freeing pedigree %ld \n", i);
+    // fprintf(stderr, "freeing pedigree %ld \n", i);
     free_pedigree(the_vped->a[i]);
   }
   free(the_vped->a);
