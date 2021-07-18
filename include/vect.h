@@ -5,12 +5,6 @@
 #define DBUG 1
 
 // *********  typedefs  ********
-typedef struct{
-  double x;
-  double y;
-  double z;
-} Xyz;
-
 
 typedef struct{
   long capacity; // allocated size
@@ -42,7 +36,6 @@ typedef struct{
 } Vidxid;
 
 
-
 // *****  Function declarations  ************************************************************
 
 // ***** Vlong ******************************************************************************
@@ -52,7 +45,7 @@ Vlong* construct_vlong_from_array(long size, long* array); // initialize with ar
 Vlong* construct_vlong_whole_numbers(long size); // initialize to 0,1,2,3,...size-1
 void add_long_to_vlong(Vlong* the_vlong, long x); // push, realloc if necessary
 void shuffle_vlong(Vlong* the_vlong); // randomize order of array elements
-void free_vlong(Vlong* the_vlong); // free memory
+void free_vlong(const Vlong* the_vlong); // free memory
 
 
 // *****  Vstr  *****************************************************************************
@@ -62,18 +55,18 @@ void add_string_to_vstr(Vstr* the_vstr, char* str); // push, realloc if necessar
 char* ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last element, etc.
 char* copy_ith_str_from_vstr(Vstr* the_vstr, long i); // perl-like: index -1 -> last element, etc.
 void print_vstr(FILE* fh, Vstr* the_vstr);
-void free_vstr(Vstr* the_vstr); // free memory
+void free_vstr(const Vstr* the_vstr); // free memory
 
 // *****  Vchar  *****
 Vchar* construct_vchar(long cap);
 Vchar* construct_vchar_from_str(char* str); // str is null-terminated str
 Vchar* append_str_to_vchar(Vchar* the_vchar, char* str);
 void print_vchar(FILE* fh, Vchar* the_vchar);
-void free_vchar(Vchar* the_vchar);
+void free_vchar(const Vchar* the_vchar);
 
 // *****  IndexId  *****
 IndexId* construct_indexid(long idx, char* id);
-void free_indexid(IndexId* the_idxid);
+void free_indexid(const IndexId* the_idxid);
 
 // *****  Vidxid  *****
 Vidxid* construct_vidxid_from_vstr(Vstr* ids);
@@ -81,7 +74,8 @@ Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids);
 int strcmpx(const void* v1, const void* v2);
 void sort_vidxid_by_id(Vidxid* the_vidxid);
 long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id);
-long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids);
+// long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids);
 void print_vidxid(FILE* fh, Vidxid* the_vidxid);
-void free_vidxid(Vidxid* the_vidxid);
+void free_vidxid(const Vidxid* the_vidxid);
+
 

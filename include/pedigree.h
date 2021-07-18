@@ -4,11 +4,11 @@ typedef struct{
   long d; // denominator
 }ND; // numerator and denominator
 
-typedef struct{
-  ND a;
-  ND h;
-  ND r;
-}Ahr;
+/* typedef struct{ */
+/*   ND a; */
+/*   ND h; */
+/*   ND r; */
+/* }Ahr; */
 
 typedef struct{
   ND par1_hgmr;
@@ -47,25 +47,24 @@ typedef struct{
 // *****  function declarations  *****
 
 // *****  Ahr  ******
-void print_Ahr(FILE* fh, Ahr the_ahr);
+//void print_Ahr(FILE* fh, Ahr the_ahr);
 
 // *****  Pedigree  *****
 Pedigree* construct_pedigree(Accession* Acc, Accession* Fparent, Accession* Mparent);
-Pedigree* construct_pedigree_from_idxids(IndexId* acc_idxid, IndexId* fempar_idxid, IndexId* malpar_idxid);
-void agmr_hgmr_r(char* gts1, char* gts2, Ahr* the_nd3);
+// void agmr_hgmr_r(char* gts1, char* gts2, Ahr* the_nd3);
 double hgmr(char* gts1, char* gts2);
 // void calculate_pedigree_test_info(Pedigree* the_pedigree); // , GenotypesSet* the_gtsset);
 Pedigree_stats* calculate_pedigree_stats(Pedigree* the_pedigree); // , GenotypesSet* the_gtsset);
 // void print_pedigree_test_info(FILE* fh, Pedigree* the_pedigree, GenotypesSet* the_gtsset, Vlong* parents_idxs);
-void print_pedigree_alternatives(FILE* fh, Pedigree* the_pedigree, const GenotypesSet* const the_gtsset, Vlong* parent_idxs);
-void free_pedigree(Pedigree* the_pedigree);
+void print_pedigree_alternatives(FILE* fh, const Pedigree* the_pedigree, const GenotypesSet* const the_gtsset, const Vlong* parent_idxs);
+void free_pedigree(const Pedigree* the_pedigree);
 
 // *****  Vpedigree  *****
 Vpedigree* read_the_pedigrees_file_and_store(FILE* p_stream, Vidxid* the_vidxid, GenotypesSet* the_gtsset); 
 Vpedigree* construct_vpedigree(long cap);
-Vlong* accessions_with_offspring(Vpedigree* the_Vped, long n_accessions);
-void add_pedigree_to_vpedigree(Vpedigree* the_vped, const Pedigree* const the_ped);
-void free_vpedigree(Vpedigree* the_vped);
+const Vlong* accessions_with_offspring(const Vpedigree* the_Vped, long n_accessions);
+void add_pedigree_to_vpedigree(Vpedigree* the_vped, Pedigree* the_ped);
+void free_vpedigree(const Vpedigree* the_vped);
 
 // *****  array of Idxhgmr  *****
 int cmpidxhgmr(const void* v1, const void* v2);

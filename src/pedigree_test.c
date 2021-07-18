@@ -131,20 +131,20 @@ main(int argc, char *argv[])
   print_genotypesset_summary_info(stderr, the_genotypes_set);
    
   if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
-  check_gtsset(the_genotypes_set);
+  // check_gtsset(the_genotypes_set);
   long n_accessions = the_genotypes_set->n_accessions;
   long n_markers_all = the_genotypes_set->n_markers;
   
   fprintf(stderr, "# Done reading in genotype data. %ld accession and %ld markers. Time: %lf sec.\n", n_accessions, n_markers_all, hi_res_time() - t_start);
 
   t_start = hi_res_time();
-  Vidxid* the_vidxid = construct_sorted_vidxid_from_vstr(the_genotypes_set->accession_ids);
+  Vidxid* the_vidxid = construct_sorted_vidxid(the_genotypes_set);
   fprintf(stderr, "# Time to set up id index map: %lf \n", hi_res_time() - t_start);
  
   // *****  clean genotypes set, i.e. remove markers with high missing data  ****
   t_start = hi_res_time();
   GenotypesSet* the_cleaned_genotypes_set = construct_cleaned_genotypesset(the_genotypes_set, max_marker_missing_data);
-    check_gtsset(the_cleaned_genotypes_set);
+  //  check_gtsset(the_cleaned_genotypes_set);
   long n_markers_good = the_cleaned_genotypes_set->n_markers;
   free_genotypesset(the_genotypes_set); // free the raw genotypes set; use the cleaned one.
   print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
@@ -157,15 +157,14 @@ main(int argc, char *argv[])
   
   // ***************  read the pedigrees file  ***************************
   t_start = hi_res_time();
-  Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid, the_cleaned_genotypes_set);
+  const Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid, the_cleaned_genotypes_set);
   fclose(p_stream);
   fprintf(stderr, "# Done reading pedigree file. Stored %ld pedigrees. Time: %lf sec.\n",
 	  pedigrees->size, hi_res_time() - t_start);
 
- 
   // ***************  Done reading input files  ******************************
 
-   Vlong* parent_idxs = accessions_with_offspring(pedigrees, n_accessions);
+   const Vlong* parent_idxs = accessions_with_offspring(pedigrees, n_accessions);
   /* for(long i=0; i<parent_idxs->size; i++){ */
   /*     printf("index of accession with offspring: %ld\n", parent_idxs->a[i]); */
   /* } */

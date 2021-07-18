@@ -72,9 +72,9 @@ void shuffle_vlong(Vlong* the_vlong){
   }
 }
 
-void free_vlong(Vlong* the_vlong){
+void free_vlong(const Vlong* the_vlong){
   free(the_vlong->a);
-  free(the_vlong);
+  free((Vlong*)the_vlong);
 }
 
 // *****  Vstr  ***************************************************
@@ -137,12 +137,12 @@ void print_vstr(FILE* fh, Vstr* the_vstr){
   fprintf(fh, "\n");
 }
 
-void free_vstr(Vstr* the_vstr){
+void free_vstr(const Vstr* the_vstr){
   for(long i=0; i<the_vstr->size; i++){ 
     free(the_vstr->a[i]);
   }
   free(the_vstr->a);
-  free(the_vstr);
+  free((Vstr*)the_vstr);
 }
 
 // *****  Vchar  *****
@@ -179,9 +179,9 @@ Vchar* append_str_to_vchar(Vchar* the_vchar, char* str){
 void print_vchar(FILE* fh, Vchar* the_vchar){
   fprintf(fh, "%s", the_vchar->a);
 }
-void free_vchar(Vchar* the_vchar){
+void free_vchar(const Vchar* the_vchar){
   free(the_vchar->a);
-  free(the_vchar);
+  free((Vchar*)the_vchar);
 }
 
 // *****  IndexId *****
@@ -192,9 +192,9 @@ IndexId* construct_indexid(long idx, char* id){
   return the_idxid;
 }
 
-void free_indexid(IndexId* the_idxid){
+void free_indexid(const IndexId* the_idxid){
   free(the_idxid->id);
-  free(the_idxid);
+  free((IndexId*)the_idxid);
 }
 
 // *****  Vidxid  *****
@@ -229,9 +229,10 @@ Vidxid* construct_vidxid_from_vstr(Vstr* ids){
 Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids){
   Vidxid* the_vidxid = construct_vidxid_from_vstr(ids);
   sort_vidxid_by_id(the_vidxid);
-   if(DBUG) assert(check_idxid_map(the_vidxid, ids) == 1);
+  // if(DBUG) assert(check_idxid_map(the_vidxid, ids) == 1);
   return the_vidxid;
 }
+
 
 int strcmpx(const void* v1, const void* v2){
   const IndexId** s1 = (const IndexId**)v1;
@@ -293,14 +294,14 @@ long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id){
   return result;
 }
 
-long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids){
-  for(long i=0; i<accession_ids->size; i++){
-    char* id = accession_ids->a[i];
-    long idx = index_of_id_in_vidxid(vidxid, id);
-    if(idx != i) return 0;
-  }
-  return 1;
-}
+/* long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids){ */
+/*   for(long i=0; i<accession_ids->size; i++){ */
+/*     char* id = accession_ids->a[i]; */
+/*     long idx = index_of_id_in_vidxid(vidxid, id); */
+/*     if(idx != i) return 0; */
+/*   } */
+/*   return 1; */
+/* } */
 
 void print_vidxid(FILE* fh, Vidxid* the_vidxid){
   for(long i=0; i<the_vidxid->size; i++){
@@ -309,11 +310,11 @@ void print_vidxid(FILE* fh, Vidxid* the_vidxid){
   }
 }
 
-void free_vidxid(Vidxid* the_vidxid){
+void free_vidxid(const Vidxid* the_vidxid){
   for(long i=0; i<the_vidxid->size; i++){
     free_indexid(the_vidxid->a[i]);
   }
   free(the_vidxid->a);
-  free(the_vidxid);
+  free((Vidxid*)the_vidxid);
 }
 
