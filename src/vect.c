@@ -5,7 +5,6 @@
 #include <assert.h>
 #include "vect.h"
 
-
 // *****  Vlong  **********************************************
 
 Vlong* construct_vlong(long cap){
@@ -47,19 +46,13 @@ Vlong* construct_vlong_whole_numbers(long size){ // initialize to 0,1,2,3,...siz
 void add_long_to_vlong(Vlong* the_vlong, long x){
   long cap = the_vlong->capacity;
   long n = the_vlong->size;
-  //  printf("cap n: %ld %ld\n", cap, n);
-  // if necessary, resize w realloc
-  if(n == cap){
+  if(n == cap){   // if necessary, resize w realloc
     cap *= 2;
     the_vlong->a = (long*)realloc(the_vlong->a, cap*sizeof(long));
-    //    printf("realloc in add_long_to_vlong. new cap: %ld\n", cap);
     the_vlong->capacity = cap;
   }
-  //  printf("after realloc. cap: %ld \n", cap);
   the_vlong->a[n] = x;
-  //  printf("after assignment to a[n]\n");
   the_vlong->size++;
-  // printf("about to return from add_long_to_vlong. size %ld\n", the_vlong->size);
 }
 
 void shuffle_vlong(Vlong* the_vlong){
@@ -84,7 +77,6 @@ Vstr* construct_vstr(long cap){
   the_vstr->capacity = cap;
   the_vstr->size = 0;
   the_vstr->a = (char**)malloc(cap*sizeof(char*));
-  // printf("returning from construct_vstr\n");
   return the_vstr;
 }
 
@@ -106,8 +98,7 @@ Vstr* construct_vstr_copy(Vstr* the_vstr){
 void add_string_to_vstr(Vstr* the_vstr, char* str){ // 
   long cap = the_vstr->capacity;
   long n = the_vstr->size;
-  // if necessary, resize w realloc
-  if(n == cap){
+  if(n == cap){   // if necessary, resize w realloc
     cap *= 2;
     the_vstr->a = (char**)realloc(the_vstr->a, cap*sizeof(char*));
     the_vstr->capacity = cap;
@@ -156,7 +147,7 @@ Vchar* construct_vchar(long cap){ //
   return the_vchar;
 }
 
-Vchar* construct_vchar_from_str(char* str){
+Vchar* construct_vchar_from_str(char* str){ // copied str into newly allocated memory.
   Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
   the_vchar->length = (long)strlen(str);
   the_vchar->capacity = the_vchar->length+1;
@@ -198,40 +189,26 @@ void free_indexid(const IndexId* the_idxid){
 }
 
 // *****  Vidxid  *****
-/* Vidxid* construct_vidxid_from_array(long size, char** strs){ */
+
+/* Vidxid* construct_vidxid_from_vstr(Vstr* ids){ */
 /*   Vidxid* the_vidxid = (Vidxid*)malloc(sizeof(Vidxid)); */
-/*   the_vidxid->capacity = size; */
-/*   the_vidxid->size = size; */
-/*   the_vidxid->a = (IndexId**)malloc(size*sizeof(IndexId*)); */
-/*   for(long i=0; i<size; i++){ */
+/*   the_vidxid->capacity = ids->size; */
+/*   the_vidxid->size = ids->size; */
+/*   the_vidxid->a = (IndexId**)malloc(ids->size*sizeof(IndexId*)); */
+/*   for(long i=0; i<ids->size; i++){ */
 /*     IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId)); */
 /*     the_idxid->index = i; */
-/*     the_idxid->id = strcpy((char*)malloc((strlen(strs[i])+1)*sizeof(char)), strs[i]); */
+/*     the_idxid->id = strcpy((char*)malloc((strlen(ids->a[i])+1)*sizeof(char)), ids->a[i]); */
 /*     the_vidxid->a[i] = the_idxid; */
 /*   } */
 /*   return the_vidxid;   */
 /* } */
 
-Vidxid* construct_vidxid_from_vstr(Vstr* ids){
-  Vidxid* the_vidxid = (Vidxid*)malloc(sizeof(Vidxid));
-  the_vidxid->capacity = ids->size;
-  the_vidxid->size = ids->size;
-  the_vidxid->a = (IndexId**)malloc(ids->size*sizeof(IndexId*));
-  for(long i=0; i<ids->size; i++){
-    IndexId* the_idxid = (IndexId*)malloc(sizeof(IndexId));
-    the_idxid->index = i;
-    the_idxid->id = strcpy((char*)malloc((strlen(ids->a[i])+1)*sizeof(char)), ids->a[i]);
-    the_vidxid->a[i] = the_idxid;
-  }
-  return the_vidxid;  
-}
-
-Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids){
-  Vidxid* the_vidxid = construct_vidxid_from_vstr(ids);
-  sort_vidxid_by_id(the_vidxid);
-  // if(DBUG) assert(check_idxid_map(the_vidxid, ids) == 1);
-  return the_vidxid;
-}
+/* Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids){ */
+/*   Vidxid* the_vidxid = construct_vidxid_from_vstr(ids); */
+/*   sort_vidxid_by_id(the_vidxid); */
+/*   return the_vidxid; */
+/* } */
 
 
 int strcmpx(const void* v1, const void* v2){
@@ -245,13 +222,11 @@ void sort_vidxid_by_id(Vidxid* the_vidxid){ // sort in place
 }
 
 long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id){
-  // find the index corresponding to id
-  // by binary search
+  // find the index corresponding to id  by binary search
   long lb = 0;
   long ub = the_vidxid->size - 1;
   long idx_guess = (lb + ub)/2;
   char* id_guess = the_vidxid->a[idx_guess]->id;
-  // fprintf(stderr, "A: lb: %ld  idx_guess: %ld  ub: %ld  %s\n", lb, idx_guess, ub, id);
    if(lb > ub) getchar();
   int icmp;
   while((icmp = strcmp(id_guess, id)) != 0){
@@ -265,43 +240,26 @@ long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id){
     }
     idx_guess = (lb + ub)/2;
     id_guess = the_vidxid->a[idx_guess]->id;
-    //   fprintf(stderr, "B: lb: %ld  idx_guess: %ld  ub: %ld   [%s]  [%s]\n", lb, idx_guess, ub, id, id_guess);
     }else if(ub - lb == 1){
       idx_guess = lb;
       id_guess = the_vidxid->a[idx_guess]->id;
       if(strcmp(id_guess, id) == 0) {
-	//	fprintf(stderr, "C: lb: %ld  idx_guess: %ld  ub: %ld   [%s]  [%s]\n", lb, idx_guess, ub, id, id_guess);
-	//	fprintf(stderr, "in index_of_... index found: %ld\n", the_vidxid->a[idx_guess]->index);
 	return the_vidxid->a[idx_guess]->index;
       }
 
       idx_guess = ub;
       id_guess = the_vidxid->a[idx_guess]->id;
       if(strcmp(the_vidxid->a[ub]->id, id) == 0){
-	//	fprintf(stderr, "D: lb: %ld  idx_guess: %ld  ub: %ld   [%s]  [%s]\n", lb, idx_guess, ub, id, id_guess);
-	//	fprintf(stderr, "in index_of_... index found: %ld\n", the_vidxid->a[idx_guess]->index);
 	return the_vidxid->a[idx_guess]->index;
       }
-      //          fprintf(stderr, "E: lb: %ld  idx_guess: %ld  ub: %ld   %s\n", lb, idx_guess, ub, id);
       return -1;
     }else{
-      //    fprintf(stderr, "F: lb: %ld  idx_guess: %ld  ub: %ld   %s\n", lb, idx_guess, ub, id);
       exit(EXIT_FAILURE);
     }
   }
   long result = the_vidxid->a[idx_guess]->index;
-  //  fprintf(stderr, "in index_of_ ... index found: %ld \n", result);
   return result;
 }
-
-/* long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids){ */
-/*   for(long i=0; i<accession_ids->size; i++){ */
-/*     char* id = accession_ids->a[i]; */
-/*     long idx = index_of_id_in_vidxid(vidxid, id); */
-/*     if(idx != i) return 0; */
-/*   } */
-/*   return 1; */
-/* } */
 
 void print_vidxid(FILE* fh, Vidxid* the_vidxid){
   for(long i=0; i<the_vidxid->size; i++){
@@ -317,4 +275,3 @@ void free_vidxid(const Vidxid* the_vidxid){
   free(the_vidxid->a);
   free((Vidxid*)the_vidxid);
 }
-

@@ -7,9 +7,11 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <assert.h>
-// #include "vect.h"
 #include "gtset.h"
 #include "pedigree.h"
+#define UNKNOWN -1
+#define DOSAGES 0
+#define GENOTYPES 1
 
 int do_checks_flag = 0; // option -c sets this to 1 to do some checks.
 
@@ -19,34 +21,50 @@ double hi_res_time(void);
 // ***********************************  main  ***************************************************
 // **********************************************************************************************
 
+
 int
 main(int argc, char *argv[])
 {
+  double t_begin_main = hi_res_time();
+  
+  int do_alternative_pedigrees_flag = 0;
   double delta = 0.05; // default; control this with -d command line option.
   double max_marker_missing_data = 0.2; // default; control this with -x command line option.
-  char* output_filename = "pedigree_check_info";
-
-  long max_number_of_accessions = 1000000;
-
-  
+  char* pedigree_test_output_filename = "pedigree_test_info";
+  char* genotypes_matrix_output_filename = "genotype_matrix_out";
   // ***** process command line *****
   if (argc < 2) {
     fprintf(stderr, "Usage:  %s -g <genotypes_file>  -p <pedigree_file>  options -d -x \n", argv[0]);
     exit(EXIT_FAILURE);
   }
-
+  //  char* dosages_filename = NULL;
   char* genotypes_filename = NULL;
   FILE *g_stream = NULL;
   char* pedigrees_filename = NULL;
   FILE *p_stream = NULL;
 
-  // g: genotypes filename, p pedigree filename,  d (delta for rounding), x max fraction of missing data for markers.
+  // a: do pedigree alternatives, c: do checks,
+  // d: dosages filename, g: genotypes filename (must have either d or g)
+  // p pedigree filename,  w (width for rounding is +-w),
+  // x: max fraction of missing data for markers, o: output filename.
   int c;
-  while((c = getopt(argc, argv, "cg:p:d:x:o:")) != -1){
-    // fprintf(stderr, "c: %c %s %d\n", c, optarg, optind);
+  int genotype_file_type = UNKNOWN;
+  while((c = getopt(argc, argv, "acd:g:p:w:x:o:")) != -1){
     switch(c){
+    case 'a':
+      do_alternative_pedigrees_flag = 1;
+      break;
     case 'c':
       do_checks_flag = 1;
+      break;
+       case 'd':
+      genotypes_filename = optarg;
+      g_stream = fopen(genotypes_filename, "r");
+      if(g_stream == NULL){
+	fprintf(stderr, "Failed to open %s for reading.\n", genotypes_filename);
+	exit(EXIT_FAILURE);
+      }
+      genotype_file_type = DOSAGES;
       break;
     case 'g':
       genotypes_filename = optarg;
@@ -54,7 +72,9 @@ main(int argc, char *argv[])
       if(g_stream == NULL){
 	fprintf(stderr, "Failed to open %s for reading.\n", genotypes_filename);
 	exit(EXIT_FAILURE);
+
       }
+      	genotype_file_type = GENOTYPES;
       break;
     case 'p':
       pedigrees_filename = optarg;
@@ -65,9 +85,9 @@ main(int argc, char *argv[])
       }
       break;
     case 'o':
-      output_filename = optarg;
+      pedigree_test_output_filename = optarg;
       break;
-    case 'd':
+    case 'w':
       if(optarg == 0){
 	perror("option d requires a numerical argument > 0\n");
 	exit(EXIT_FAILURE);
@@ -112,66 +132,77 @@ main(int argc, char *argv[])
   }
   
   FILE *o_stream = NULL;
-  o_stream = fopen(output_filename, "w");
+  o_stream = fopen(pedigree_test_output_filename, "w");
   if(o_stream == NULL){
-    fprintf(stderr, "Failed to open %s for writing.\n", output_filename);
+    fprintf(stderr, "Failed to open %s for writing.\n", pedigree_test_output_filename);
     exit(EXIT_FAILURE);
   }
-      
+  fprintf(stderr, "# genotypes file type: %d\n", genotype_file_type);
   fprintf(stderr, "# genotypes file: %s  pedigree file: %s  delta: %5.3lf  max marker missing data: %5.3lf  output file: %s\n",
-	  genotypes_filename, pedigrees_filename, delta, max_marker_missing_data, output_filename);
+	  genotypes_filename, pedigrees_filename, delta, max_marker_missing_data, pedigree_test_output_filename);
 
+  
   // *****  done processing command line  *****
 
   // ***************  read the genotypes file  *******************************
   double t_start = hi_res_time();
-  GenotypesSet* the_genotypes_set = read_genotypes_file_and_store(g_stream, delta, max_marker_missing_data);
-  fclose(g_stream);
-
-  print_genotypesset_summary_info(stderr, the_genotypes_set);
-   
-  if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
-  // check_gtsset(the_genotypes_set);
-  long n_accessions = the_genotypes_set->n_accessions;
-  long n_markers_all = the_genotypes_set->n_markers;
+  GenotypesSet* the_genotypes_set;
+  if(genotype_file_type == DOSAGES){
+    fprintf(stderr, "# dosages branch \n");
+  GenotypesSet* the_raw_genotypes_set = read_dosages_file_and_store(g_stream, delta);
   
-  fprintf(stderr, "# Done reading in genotype data. %ld accession and %ld markers. Time: %lf sec.\n", n_accessions, n_markers_all, hi_res_time() - t_start);
-
-  t_start = hi_res_time();
-  Vidxid* the_vidxid = construct_sorted_vidxid(the_genotypes_set);
-  fprintf(stderr, "# Time to set up id index map: %lf \n", hi_res_time() - t_start);
+  fclose(g_stream);
+  print_genotypesset_summary_info(stderr, the_raw_genotypes_set);
+   
+  if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
+  
+  fprintf(stderr, "# Done reading in genotype data. %ld accession and %ld markers. Time: %10.4lf sec.\n", the_raw_genotypes_set->n_accessions, the_raw_genotypes_set->n_markers, hi_res_time() - t_start);
  
   // *****  clean genotypes set, i.e. remove markers with high missing data  ****
   t_start = hi_res_time();
-  GenotypesSet* the_cleaned_genotypes_set = construct_cleaned_genotypesset(the_genotypes_set, max_marker_missing_data);
-  //  check_gtsset(the_cleaned_genotypes_set);
-  long n_markers_good = the_cleaned_genotypes_set->n_markers;
-  free_genotypesset(the_genotypes_set); // free the raw genotypes set; use the cleaned one.
-  print_genotypesset_summary_info(stderr, the_cleaned_genotypes_set);
-
-  // print_genotypesset(the_cleaned_genotypes_set);
+   the_genotypes_set = construct_cleaned_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
  
-  if(DBUG && do_checks_flag) check_genotypesset(the_cleaned_genotypes_set, max_marker_missing_data);
-  fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %lf sec.\n",
+  //  check_gtsset(the_cleaned_genotypes_set);
+  long n_markers_good = the_genotypes_set->n_markers;
+  free_genotypesset(the_raw_genotypes_set); // free the raw genotypes set; use the cleaned one.
+  print_genotypesset_summary_info(stderr, the_genotypes_set);
+
+  fprintf(stderr, "# Removing markers with excessive (> %5.3lf) missing data.\n", max_marker_missing_data);
+  if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
+  fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %10.4lf sec.\n",
 	  n_markers_good, hi_res_time() - t_start);
+    FILE* og_stream = fopen(genotypes_matrix_output_filename, "w");
+  print_genotypesset(og_stream, the_genotypes_set);
+  fclose(og_stream);
+  }else if(genotype_file_type == GENOTYPES){
+    the_genotypes_set = read_genotypes_file_and_store(g_stream);
+  }else{
+    fprintf(stderr, "genotype_file_type: %d (should be 0 or 1)\n", genotype_file_type);
+    exit(EXIT_FAILURE); // no input file specified.
+  }
+ 
   
+  t_start = hi_res_time();
+  Vidxid* the_vidxid = construct_sorted_vidxid(the_genotypes_set);
+  fprintf(stderr, "# Time to set up id index map: %10.4lf \n", hi_res_time() - t_start);
   // ***************  read the pedigrees file  ***************************
   t_start = hi_res_time();
-  const Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid, the_cleaned_genotypes_set);
+  const Vpedigree* pedigrees = read_the_pedigrees_file_and_store(p_stream, the_vidxid, the_genotypes_set);
   fclose(p_stream);
-  fprintf(stderr, "# Done reading pedigree file. Stored %ld pedigrees. Time: %lf sec.\n",
+  fprintf(stderr, "# Done reading pedigree file. Stored %ld pedigrees. Time: %10.4lf sec.\n",
 	  pedigrees->size, hi_res_time() - t_start);
 
   // ***************  Done reading input files  ******************************
 
-   const Vlong* parent_idxs = accessions_with_offspring(pedigrees, n_accessions);
+  
+   const Vlong* parent_idxs = accessions_with_offspring(pedigrees, the_genotypes_set->n_accessions);
   /* for(long i=0; i<parent_idxs->size; i++){ */
   /*     printf("index of accession with offspring: %ld\n", parent_idxs->a[i]); */
   /* } */
 
   t_start = hi_res_time();
   for(long i=0; i<pedigrees->size; i++){
-    if(i % 100  == 0){
+    if(i % 1000  == 0){
       fprintf(stderr, "# Done testing %ld pedigrees.\n", i);
     }
     Pedigree_stats* the_pedigree_stats = calculate_pedigree_stats(pedigrees->a[i]); //, the_cleaned_genotypes_set);
@@ -179,27 +210,31 @@ main(int argc, char *argv[])
     fprintf(o_stream, "%s  %ld  %s %s  ",
 	    pedigrees->a[i]->A->id->a, pedigrees->a[i]->A->missing_data_count,
 	    pedigrees->a[i]->F->id->a, pedigrees->a[i]->M->id->a);
-    print_pedigree_stats(o_stream, the_pedigree_stats); 
-    print_pedigree_alternatives(o_stream, pedigrees->a[i], the_cleaned_genotypes_set, parent_idxs);
+    print_pedigree_stats_x(o_stream, the_pedigree_stats); 
+    if(do_alternative_pedigrees_flag){
+      Vpedigree* alt_pedigrees = pedigree_alternatives(pedigrees->a[i], the_genotypes_set, parent_idxs);
+      print_pedigree_alternatives(o_stream, alt_pedigrees);
+    }
     fprintf(o_stream, "\n");
     free(the_pedigree_stats);
     // if(i == 500) break; // for testing purposes only.
   }
   
-  fprintf(stderr, "# Done checking %ld pedigrees. Time: %lf sec.\n",
+  fprintf(stderr, "# Done testing %ld pedigrees. Time: %10.4lf sec.\n",
 	  pedigrees->size, hi_res_time() - t_start);
 
   // ********************  cleanup  **************************
   t_start = hi_res_time();
   fclose(o_stream);
-  free_genotypesset(the_cleaned_genotypes_set);
-  fprintf(stderr, "after free_genotypesset\n");
+  free_genotypesset(the_genotypes_set);
+  //  fprintf(stderr, "after free_genotypesset\n");
   free_vidxid(the_vidxid);
   free_vpedigree(pedigrees);
-   fprintf(stderr, "after free_vpedigree\n");
+  //  fprintf(stderr, "after free_vpedigree\n");
    free_vlong(parent_idxs);
-  fprintf(stderr, "# Done with cleanup. Time %lf sec.\n", hi_res_time() - t_start);
+  fprintf(stderr, "# Done with cleanup. Time %10.4lf sec.\n", hi_res_time() - t_start);
   // getchar();
+  fprintf(stderr, "# Total time: %10.4lf sec.\n", hi_res_time() - t_begin_main);
 }
 // **********************************************************
 // ********************  end of main  ***********************

@@ -47,7 +47,6 @@ void add_long_to_vlong(Vlong* the_vlong, long x); // push, realloc if necessary
 void shuffle_vlong(Vlong* the_vlong); // randomize order of array elements
 void free_vlong(const Vlong* the_vlong); // free memory
 
-
 // *****  Vstr  *****************************************************************************
 Vstr* construct_vstr(long cap); // set capacity = cap, size = 0
 Vstr* construct_vstr_copy(Vstr* the_vstr);
@@ -69,12 +68,11 @@ IndexId* construct_indexid(long idx, char* id);
 void free_indexid(const IndexId* the_idxid);
 
 // *****  Vidxid  *****
-Vidxid* construct_vidxid_from_vstr(Vstr* ids);
-Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids);
+/* Vidxid* construct_vidxid_from_vstr(Vstr* ids); */
+/* Vidxid* construct_sorted_vidxid_from_vstr(Vstr* ids); */
 int strcmpx(const void* v1, const void* v2);
 void sort_vidxid_by_id(Vidxid* the_vidxid);
 long index_of_id_in_vidxid(Vidxid* the_vidxid, char* id);
-// long check_idxid_map(Vidxid* vidxid, Vstr* accession_ids);
 void print_vidxid(FILE* fh, Vidxid* the_vidxid);
 void free_vidxid(const Vidxid* the_vidxid);
 
