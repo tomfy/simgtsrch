@@ -59,7 +59,7 @@ has kernel_width => (
 
 
 
-sub BUILD{
+sub BUILD{ # for clustering values in range [0,1]; values outside are invalid - skip
   my $self = shift;
 #  print STDERR "clustered quantity: ", $self->label(), "\n";
 #  print STDERR join(" ", $self->xs()->[0..20]), "\n";
@@ -68,6 +68,9 @@ sub BUILD{
   my @txs = sort {$a <=> $b} @{$self->xs()};
   while ($txs[0] < 0) {		# shift the negatives away
     shift @txs;
+  }
+  while ($txs[-1] > 1.1){ # pop away invalid data
+    pop @txs;
   }
 
   my $small_limit = 1e-8;
@@ -96,21 +99,23 @@ sub BUILD{
 }
 
 
-sub one_d_2cluster{
+sub one_d_2cluster{ # cluster 1dim data into 2 clusters
   my $self = shift;
   my $pow = $self->pow();	# cluster x**$pow (or log(x)
 
   my $n_pts = scalar @{$self->txs()};
-  my ($km_n_L, $km_h_opt, $km_mom) = $self->kmeans_2cluster();
+  my ($km_n_L, $km_h_opt, $km_mom, $q) = $self->kmeans_2cluster();
   my ($kde_n_L, $kde_h_opt, $min_kde_est) = $self->kde_2cluster($km_n_L-1);
   if ($pow eq 'log') {
     $km_h_opt = exp($km_h_opt);
     $kde_h_opt = exp($kde_h_opt);
   } else {
+   # print STDERR "pow, etc: $pow $km_h_opt   ";
     $km_h_opt = $km_h_opt**(1/$pow);
-    $kde_h_opt = $km_h_opt**(1/$pow);
+    $kde_h_opt = $kde_h_opt**(1/$pow);
+  #  print STDERR " $km_h_opt \n";
   }
-  return ($n_pts, $km_n_L, $n_pts-$km_n_L, $km_h_opt,
+  return ($n_pts, $km_n_L, $n_pts-$km_n_L, $km_h_opt, $q, 
 	  $kde_n_L, $n_pts-$kde_n_L, $kde_h_opt);
 }
 
@@ -122,9 +127,9 @@ sub kmeans_2cluster{ # divide into 2 clusters by finding dividing value h s.t. h
   # lies between the two clusters.
   my $self = shift;
   my $xs = $self->txs(); # array ref of transformed values.
-
+  my @xsqrs = map($_*$_, @$xs);
   my $h_opt;
-  my ($n, $sumx, $sumxsqr) = (scalar @$xs, sum(@$xs), 0); # sum(map($_*$_, @xs)));
+  my ($n, $sumx, $sumxsqr) = (scalar @$xs, sum(@$xs), sum(@xsqrs)); # sum(map($_*$_, @xs)));
   my ($n_left, $sumx_left, $sumxsqr_left) = (0, 0, 0);
   my ($n_right, $sumx_right, $sumxsqr_right) = ($n, $sumx, $sumxsqr);
 
@@ -132,15 +137,40 @@ sub kmeans_2cluster{ # divide into 2 clusters by finding dividing value h s.t. h
   for my $x (@$xs[0 .. $#$xs-1]) {
     $n_left++; $n_right--;
     $sumx_left += $x; $sumx_right -= $x;
+    $sumxsqr_left += $x*$x; $sumxsqr_right -= $x*$x;
+ #   print STDERR "$sumx_left ", $sumx_left/$n_left, "  $sumxsqr_left       $sumx_right  ", ($sumx_right/$n_right)**2, "   $sumxsqr_right   ", $sumxsqr_right/$n_right, "  ", $x*$x, "\n";
     $mean_of_means = 0.5*($sumx_left/$n_left + $sumx_right/$n_right);
     if ($mean_of_means < $xs->[$n_left]  and  $mean_of_means >= $x) { # this is the place
       $h_opt = 0.5*($x + $xs->[$n_left]);
       last;
     }
   }
-  return ($n_left, $h_opt, $mean_of_means);
+  if(1){
+
+  # my ($mean_left, $mean_right, $mean) = ($sumx_left/$n_left, $sumx_right/$n_right, $sumx/$n);
+  # my $var_left = ($sumxsqr_left/$n_left - $mean_left**2);
+  # my $var_right = ($sumxsqr_right/$n_right - $mean_right**2);
+  # my $var = ($sumxsqr/$n - $mean**2);
+  # my $q = sqrt($var_left + $var_right)/($mean_right - $mean_left);
+  # # my $q1 = (($L90 - $Lmedian) + ($Rmedian - $R90))/($Rmedian - $Lmedian);
+  #my $q = qqq($xs, $n_left);
+#  print STDERR "# $var_left $var_right $var   $q  $q1\n";
+  #  getchar();
+}
+  return ($n_left, $h_opt, $mean_of_means, qqq($xs, $n_left));
 }
 
+sub qqq{
+  my $xs = shift;
+  my $nL = shift;
+  my $n = scalar @$xs;
+  my $nR = $n - $nL;
+    my $Lmedian = $xs->[int(0.5*$nL)];
+  my $Rmedian = $xs->[$n-1 - int(0.5*$nR)];
+  my $L90 = $xs->[int(0.9*$nL)];
+  my $R90 = $xs->[$n-1 - int(0.9*$nR)];
+  return (($L90 - $Lmedian) + ($Rmedian - $R90))/($Rmedian - $Lmedian);
+}
 
 sub kde_2cluster{
   # now refine using kernel density estimation.
@@ -172,6 +202,8 @@ sub kde_2cluster{
   }
 
   my $kde_n_left = $kde_i_opt + 1;
+  # my $q = qqq($xs, $kde_n_left);
+  # print STDERR "kde $q \n";
   return ($kde_n_left, $kde_x_est, $min_kde_est);
 }
 
