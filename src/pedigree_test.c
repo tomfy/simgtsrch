@@ -27,11 +27,15 @@ main(int argc, char *argv[])
 {
   double t_begin_main = hi_res_time();
   
-  int do_alternative_pedigrees_flag = 0;
+  int do_alternative_pedigrees = 0; // 0: none, 1: only when given pedigree is 'bad', 2: all
   double delta = 0.05; // default; control this with -d command line option.
   double max_marker_missing_data = 0.2; // default; control this with -x command line option.
   char* pedigree_test_output_filename = "pedigree_test_info";
   char* genotypes_matrix_output_filename = "genotype_matrix_out";
+  double max_self_agmr12 = 1; // need to specify if doing alternative pedigrees 
+  double max_ok_hgmr = 1; // accept everything as ok
+  double max_self_r = 1; // need to specify if doing alternative pedigrees 
+  double max_ok_d1 = 1; // accept everything as ok
   // ***** process command line *****
   if (argc < 2) {
     fprintf(stderr, "Usage:  %s -g <genotypes_file>  -p <pedigree_file>  options -d -x \n", argv[0]);
@@ -43,16 +47,25 @@ main(int argc, char *argv[])
   char* pedigrees_filename = NULL;
   FILE *p_stream = NULL;
 
-  // a: do pedigree alternatives, c: do checks,
+  // A: pedigree alternatives 0, 1, or 2
+  // c: do checks,
   // d: dosages filename, g: genotypes filename (must have either d or g)
-  // p pedigree filename,  w (width for rounding is +-w),
+  // p: pedigree filename,  w (width for rounding is +-w),
   // x: max fraction of missing data for markers, o: output filename.
+  // a: max 'self' agmr, h: max ok hgmr,  r: max 'self' r, D: max ok d1;
   int c;
   int genotype_file_type = UNKNOWN;
-  while((c = getopt(argc, argv, "acd:g:p:w:x:o:")) != -1){
+  while((c = getopt(argc, argv, "A:cd:g:p:w:x:o:a:h:r:D:")) != -1){
     switch(c){
-    case 'a':
-      do_alternative_pedigrees_flag = 1;
+    case 'A':
+       if(optarg == 0){
+	perror("option A requires an integer argument; 0, 1, or >=2\n");
+	exit(EXIT_FAILURE);
+      }else{
+	do_alternative_pedigrees = atoi(optarg);
+	if(do_alternative_pedigrees < 0) exit(EXIT_FAILURE);
+	if(do_alternative_pedigrees > 2) do_alternative_pedigrees = 2;
+      }
       break;
     case 'c':
       do_checks_flag = 1;
@@ -89,10 +102,11 @@ main(int argc, char *argv[])
       break;
     case 'w':
       if(optarg == 0){
-	perror("option d requires a numerical argument > 0\n");
+	perror("option w requires a numerical argument > 0\n");
 	exit(EXIT_FAILURE);
       }else{
 	delta = atof(optarg);
+	if(delta < 0) exit(EXIT_FAILURE);
       }
       break;
     case 'x':
@@ -101,6 +115,42 @@ main(int argc, char *argv[])
 	exit(EXIT_FAILURE);
       }else{
 	max_marker_missing_data = atof(optarg);
+	if (max_marker_missing_data < 0) exit(EXIT_FAILURE);
+      }
+      break;
+    case 'a': // agmr12 < this -> looks like self
+      if(optarg == 0){
+	perror("option a requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }else{
+	max_self_agmr12 = atof(optarg);
+		if (max_self_agmr12 < 0) exit(EXIT_FAILURE);
+      }
+    case 'h': // hgmr > this -> poor parent-offspring candidate
+      if(optarg == 0){
+	perror("option h requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }else{
+	max_ok_hgmr = atof(optarg);
+		if (max_ok_hgmr < 0) exit(EXIT_FAILURE);
+      }
+      break;
+    case 'r': // r > this -> probably biparental
+      if(optarg == 0){
+	perror("option x requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }else{
+	max_self_r = atof(optarg);
+		 if (max_self_r < 0) exit(EXIT_FAILURE);
+      }
+      break;
+    case 'D': // d1 > this is poor candidate triple of parents and offspring
+      if(optarg == 0){
+	perror("option x requires a numerical argument > 0\n");
+	exit(EXIT_FAILURE);
+      }else{
+	max_ok_d1 = atof(optarg);
+		if (max_ok_d1 < 0) exit(EXIT_FAILURE);
       }
       break;
     case '?':
@@ -210,10 +260,14 @@ main(int argc, char *argv[])
     fprintf(o_stream, "%s  %ld  %s %s  ",
 	    pedigrees->a[i]->A->id->a, pedigrees->a[i]->A->missing_data_count,
 	    pedigrees->a[i]->F->id->a, pedigrees->a[i]->M->id->a);
-    print_pedigree_stats_x(o_stream, the_pedigree_stats); 
-    if(do_alternative_pedigrees_flag){
-      Vpedigree* alt_pedigrees = pedigree_alternatives(pedigrees->a[i], the_genotypes_set, parent_idxs);
+    print_pedigree_stats(o_stream, the_pedigree_stats); 
+    if(do_alternative_pedigrees > 0){
+      if((do_alternative_pedigrees == 2) || (pedigree_ok(the_pedigree_stats, max_self_agmr12, max_ok_hgmr, max_self_r, max_ok_d1) == 0)){
+      //   fprintf(stderr, "About to get alt. pedigrees. max_ok_hgmr: %8.4lf,  max_ok_d1: %8.4lf \n", max_ok_hgmr, max_ok_d1);
+      Vpedigree* alt_pedigrees = pedigree_alternatives(pedigrees->a[i], the_genotypes_set, parent_idxs,
+						       max_ok_hgmr, max_ok_d1);
       print_pedigree_alternatives(o_stream, alt_pedigrees);
+	}
     }
     fprintf(o_stream, "\n");
     free(the_pedigree_stats);
