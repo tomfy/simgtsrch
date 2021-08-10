@@ -1,10 +1,8 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+use List::Util qw(min max sum);
 use Getopt::Long;
-# use Graphics::GnuplotIF qw(GnuplotIF);
-# use Math::GSL::SF  qw( :all );
-
 use File::Basename 'dirname';
 use Time::HiRes qw( gettimeofday );
 use Cwd 'abs_path';
@@ -16,87 +14,126 @@ BEGIN {     # this has to go in Begin block so happens at compile time
   $libdir = abs_path($libdir);	# collapses the bin/../lib to just lib
 }
 use lib $libdir;
-print STDERR "# libdir: $libdir \n";
 
-
-use GenotypesSet;
 use PedigreesDAG;
-use CheckPedigrees;
 use Cluster1d;
 
 # *****  run C program to get agmr, hgmr, r for parent-offspring pairs according to pedigree file,
-# *****  the further analysis with perl.
+# *****  then cluster with perl,
+# *****  then run C program to test alternative pedigrees (if requested with -A option),
+# *****  and analyze with perl to get best pedigrees.
 
+# *****  input files:  *****
 my $gtfilename = undef;
 my $pedigree_table_filename = undef;
+
+# *****  parameters for processing dosages, eliminating low-quality markers
 my $delta = 0.05; # real-number genotypes are rounded to nearest integer (0,1,2) if within +- $delta
-my $max_bad_gt_fraction = 1.0;
-# my $n_random_parents = 0;
+my $max_bad_gt_fraction = 1.0; # exclude markers with greater than this proportion of missing data.
+
+# *****  output filenames:
 my $base_output_filename = 'out';
 my $output_pedigrees = 0;
 my $output_genotype_matrix = 0;
-my $checkpedigrees_progress_interval = 500;
-my $genotypeset_progress_interval = 500;
+my $c_output_filename_no_alt = 'pedigrees';
+my $c_output_filename_alt = 'pedigrees_and_alternatives';
+my $best_pedigrees_filename = 'best_pedigrees';
+
+# *****  clustering control parameters:
 my $pow = 'log';
+
+# *****  control of search for alternative pedigrees:
 my $find_alternatives = 0;
 
-my $c_output_filename = 'c_out.tmp';
+
 GetOptions(
+	   # input filenames:
 	   'gtsfile|gtfile|genotypesfile=s' => \$gtfilename,
 	   'pedigreein|pedigreefile|pedtable=s' => \$pedigree_table_filename,
+	   # control dosages -> cleaned genotypes
 	   'delta=f' => \$delta,
 	   'max_bad_gt_fraction=f' => \$max_bad_gt_fraction,
+	   # output filenames
 	   'baseout|basename=s' => \$base_output_filename,
 	   'outpedigrees!' => \$output_pedigrees,
 	   'outmatrix!' => \$output_genotype_matrix,
+	   'out_no_alt|out_noalt=s' => \$c_output_filename_no_alt,
+	   'out_alt=s' => \$c_output_filename_alt,
+	   'out_best=s' => \$best_pedigrees_filename,
+	   # clustering control
 	   'pow=s' => \$pow,
+	   # control search for alternative pedigrees
 	   'alternatives=i' => \$find_alternatives, # 0: none, 1: only for 'bad' pedigrees, >=2: do for all pedigrees.
 	  );
 
 die "No genotypes matrix filename provided.\n" if(!defined $gtfilename);
 
-# Read in the pedigree table:
-
+# *****  Read in the pedigree table:
 my $t_start = gettimeofday();
-print STDERR "# Creating PedigreesDAG object from file: $pedigree_table_filename\n";
+print  "# Creating PedigreesDAG object from file: $pedigree_table_filename\n";
 my $pedigrees = PedigreesDAG->new({pedigree_filename => $pedigree_table_filename});
-print STDERR "# PedigreesDAG object created.\n\n";
+print  "# PedigreesDAG object created.\n";
 if ($output_pedigrees) {
   my $pedigree_output_filename = $base_output_filename . '_pedigrees';
   open my $fhout, ">", "$pedigree_output_filename";
   print $fhout $pedigrees->as_string();
   close $fhout;
 }
-print STDERR "# Time to read pedigree file, create PedigreesDAG obj: ", gettimeofday() - $t_start, "\n";
+print "# Time to read pedigree file, create PedigreesDAG obj: ", gettimeofday() - $t_start, "\n";
 
-# Read in the genotype matrix file
-my $wd = `pwd`;
-print "wd: $wd\n";
-my $command = "~/simgtsrch/src/pedigree_test -g $gtfilename -p $pedigree_table_filename  -w $delta  -x $max_bad_gt_fraction  -o $c_output_filename ";
-print STDERR "command: $command \n";
+
+# Read in the genotype matrix file. Determine whether has dosages or 0,1,2,3 genotypes.
+my $input_type = 'unknown';
+my $c_program_gt_input_option = '-g';
+open my $fhgt, "<", "$gtfilename";
+while (1) {
+  my $line = <$fhgt>;
+  last if($line =~ /^\s*MARKER/);
+}
+my $line = <$fhgt>;
+my @cols = split(" ", $line);
+if (scalar @cols == 2) {	# genotypes (0, 1, 2, or 3);
+  if ($cols[1] =~ /[456789]+/) {
+    print STDERR "# Should be only digits 0123 in genotypes. Exiting.\n";
+    exit;
+  }
+  #  $input_type = 'genotypes0123';
+  $c_program_gt_input_option = '-g';
+} elsif (scalar @cols > 2) {	# dosages
+  #  $input_type = 'dosages';
+  $c_program_gt_input_option = '-d';
+} else {
+  print STDERR "# Number of columns is ", scalar @cols, ". Should be >= 2. Exiting.\n";
+  exit;
+}
+
+# Run c program to get stats on pedigrees in pedigree table:
+my $command = "~/simgtsrch/src/pedigree_test $c_program_gt_input_option $gtfilename -p $pedigree_table_filename ";
+$command .= " -w $delta  -x $max_bad_gt_fraction  -o $c_output_filename_no_alt ";
+print  "# command: $command \n";
 system "$command";
 
-# exit;
-open my $fhin, "<", "$c_output_filename" or die "Couldn't open $c_output_filename for reading.\n";
+# *****  Test pedigrees in pedigree table:
+open my $fhin, "<", "$c_output_filename_no_alt" or die "Couldn't open $c_output_filename_no_alt for reading.\n";
 
 my @lines = <$fhin>;
 
-print scalar @lines, "\n";
+print "# Number of pedigrees to be analyzed: ", scalar @lines, "\n";
 
+# *****  Cluster agmr between parents in pedigree table
 my @matpat_agmrs = ();
 #my @array_of_lines_as_cols = ();
 while (my ($j, $line) = each @lines) {
   my @cols = split(" ", $line);
-  #   push @array_of_lines_as_cols, \@cols;
   push @matpat_agmrs, $cols[5];
 }
 my $cluster1d_obj = Cluster1d->new({label => 'agmr between parents', xs => \@matpat_agmrs, pow => $pow});
 my ($n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt) = $cluster1d_obj->one_d_2cluster();
-#print "clustering of hgmr (female parent): $n_pts k-means: $km_n_L below $km_n_R above $km_h_opt;  kde: $kde_n_L below $kde_n_R above $kde_h_opt.\n";
 printf("clustering of agmr between parents: %5d  k-means: %5d below %5d above %8.6f, q: %6.4f;  kde: %5d below %5d above %8.6f.\n", $n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt);
 
-my $agmr_h = $km_h_opt;
+my $max_self_agmr = $km_h_opt;
 
+# #####  Clustering of hgmr, r, d1   ##########################
 my @hgmr_denoms = ();
 my @hgmrs = ();
 my @r_denoms = ();
@@ -104,28 +141,17 @@ my @rs = ();
 my @d1_denoms = ();
 my @d1s = ();
 
-
-
-# my @self_hgmrs = ();		# self (according to pedigree)
-# my @bip_hgmrs = ();		# biparental (according to pedigree)
-# my @self_rs = ();
-# my @bip_rs = ();
-# my @self_d1s = ();
-# my @bip_d1s = ();
-
-
-# #####  clustering  ##########################
 while (my ($j, $line) = each @lines) {
   my @cols = split(" ", $line);
 
   my ($accid, $bad_gt_count) = @cols[0,1];
   my ($mat_id, $pat_id) = @cols[2,3];
-  
+
   my $matpat_agmr = $cols[5];
   my ($mat_hgmr, $pat_hgmr) = @cols[7,11];
   my ($mat_r, $pat_r) = @cols[9,13];
   my ($d1, $d2) = @cols[15,17];
-  
+
   push @hgmr_denoms, @cols[6,10];
   push @hgmrs, ($mat_hgmr, $pat_hgmr);
   push @r_denoms, @cols[8,12];
@@ -153,105 +179,99 @@ $cluster1d_obj = Cluster1d->new({label => 'd1', xs => \@d1s, pow => $pow});
 printf("clustering of   d1: %5d  k-means: %5d below %5d above %8.6f, q: %6.4f;  kde: %5d below %5d above %8.6f.\n", $n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt);
 my $max_ok_d1 = $km_h_opt;
 
-
-
-# if($hgmr_denoms_ok  and  $r_denoms_ok  and  $d1_denoms_ok){
-#   if($Fhgmr <= $max_ok_hgmr  and  $Mhgmr <= $max_ok_hgmr  and  $d1 <= $max_ok_d1){
-#   }
-# }else{ # high missing data
-
-# }
-
+# *****  Look at alternative pedigrees if requested
 if ($find_alternatives > 0) {
-
-  $command = "~/simgtsrch/src/pedigree_test -g $gtfilename -p $pedigree_table_filename  -w $delta  -x $max_bad_gt_fraction -A $find_alternatives -o pedigrees_w_alternatives ";
-  $command .= " -a $agmr_h  -h $max_ok_hgmr -r $max_self_r -D $max_ok_d1";
-  print STDERR "command: $command \n";
+  $gtfilename = 'genotype_matrix_out';
+  $command = "~/simgtsrch/src/pedigree_test -g $gtfilename -p $pedigree_table_filename  -w $delta  -x $max_bad_gt_fraction -A $find_alternatives -o $c_output_filename_alt ";
+  $command .= " -a $max_self_agmr  -h $max_ok_hgmr -r $max_self_r -D $max_ok_d1";
+  print "# command: $command \n";
   system "$command";
 
-}
 
-open my $fh_alt, "<", "pedigrees_w_alternatives";
-@lines = <$fh_alt>;
+  open my $fh_alt, "<", "$c_output_filename_alt";
+  @lines = <$fh_alt>;
 
-my $factor = 0.33;
-my %category_counts = ();
-my $bad_denoms_count = 0;
-while (my ($j, $line) = each @lines) {
-  my @cols = split(" ", $line);
-  my ($acc_id, $acc_md) = @cols[0,1];
-  my $ped_d1 = $cols[15];
-  my $category_string = '';
-  my $denoms_ok = are_denoms_ok(\@cols, 4, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, $factor);
+  my $factor = 0.33;
+  my %category_counts = ();
+  my $bad_denoms_count = 0;
 
-  if($denoms_ok){
-    $category_string = category(\@cols, 4, $agmr_h, $max_ok_hgmr, $max_self_r, $max_ok_d1);
-    $category_counts{$category_string}++;
-  }else{
-    $category_string = 'bad_denoms';
-    $bad_denoms_count++;
-  }
+  open my $fhbest, ">", "$best_pedigrees_filename";
+  while (my ($j, $line) = each @lines) {
+    my @cols = split(" ", $line);
+    my ($acc_id, $acc_md) = @cols[0,1];
+    my ($mat_id, $pat_id) = @cols[2,3];
+    my $id_pair = "$mat_id $pat_id";
+    my $ped_d1 = $cols[15];
+    my $category_string = '';
+    my %allped_d1 = ();
+    my $ok_pedigrees_count = 0; # counts all ok (small d1) pedigrees for this accession, both pedigree from table and alternatives.
+    my $denoms_ok = are_denoms_ok(\@cols, 4, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, $factor);
+    $category_string = ($denoms_ok)? category(\@cols, 4, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1) : 'x xx xx x';
+    my $ped_str = "  ped  $id_pair  $category_string";
+    if ($denoms_ok) {
+      $ok_pedigrees_count++ if ($category_string eq '0 00 00 0'  or  $category_string eq '1 01 01 0');
+      $category_counts{$category_string}++;
+    } else {
+      $bad_denoms_count++;
+    }
+    $allped_d1{$ped_str} = $ped_d1;
 
     # alternative pedigrees:
-  my $n_alternatives = $cols[18] // 0; #
-  my $good_alternative_count = 0;
-  my %alt_d1 = ();
-  for (my $i = 0; $i < $n_alternatives; $i++) {
-    my $first = 21 + $i*16;
-    $denoms_ok = are_denoms_ok(\@cols, $first, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, 0.33);
-    if($denoms_ok){
+    my $n_alternatives = $cols[18] // 0; #
+    my %okalt_d1 = ();
+    for (my $i = 0; $i < $n_alternatives; $i++) {
+      my $first = 21 + $i*16;
+      my $alt_category_string = '';
       my $alt_id_pair = $cols[$first-2] . ' ' . $cols[$first-1];
       my $alt_d1 = $cols[$first+11];
-      my $alt_category_string = category(\@cols, $first, $agmr_h, $max_ok_hgmr, $max_self_r, $max_ok_d1);
-      if($alt_category_string eq '0 00 00 0'  or $alt_category_string eq '1 01 01 0'){
-	$good_alternative_count++;
-	$alt_d1{$alt_id_pair . "  " . $alt_category_string} = $alt_d1;
+      $denoms_ok = are_denoms_ok(\@cols, $first, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, $factor);
+      if ($denoms_ok) {
+	$alt_category_string = category(\@cols, $first, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1);
+	if ($alt_category_string eq '0 00 00 0'  or $alt_category_string eq '1 01 01 0') {
+	  $ok_pedigrees_count++;
+	  $okalt_d1{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d1;
+	}
+      }else{
+	$alt_category_string = 'x xx xx x';
+      }
+       $allped_d1{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d1;
+    }
+
+    my $output_string = $cols[0] . "  $ok_pedigrees_count";
+    my @sorted_alts = sort {$okalt_d1{$a} <=> $okalt_d1{$b} } keys %okalt_d1;
+    my @sorted_allpeds = sort {$allped_d1{$a} <=> $allped_d1{$b} } keys %allped_d1;
+    if ($category_string eq '0 00 00 0'  or  $category_string eq '1 01 01 0') { # pedigree from table is 'good'
+      $output_string .= "  ped" . $ped_str . "  " . $ped_d1; # ped  " . $id_pair . "  $category_string  $ped_d1";
+      if (scalar @sorted_alts > 0) {
+	$output_string .= $sorted_alts[0] . "  " . $okalt_d1{$sorted_alts[0]};
+      }
+    } elsif (scalar @sorted_alts > 0) {
+      $output_string .= "  alt";
+      for (my $i = 0; $i < min(scalar @sorted_alts, 2); $i++) {
+	$output_string .= $sorted_alts[$i] . "  " . $okalt_d1{$sorted_alts[$i]};
+      }
+    } else {
+      $output_string .= "  none";
+      for (my $i = 0; $i < min(scalar @sorted_allpeds, 2); $i++) {
+	$output_string .= $sorted_allpeds[$i] . "  " . $allped_d1{$sorted_allpeds[$i]};
       }
     }
+    $output_string .= "\n";
+    print $fhbest $output_string; # output 1 line about likely pedigrees for this accession.
   }
-  print $cols[0];
-  if($category_string eq '0 00 00 0'  or  $category_string eq '1 01 01 0'){
-    print "  ped  ", $cols[2], "  ", $cols[3], "   $category_string  $ped_d1  $good_alternative_count\n";
-  }elsif($good_alternative_count > 0){
-    my @sorted_alts = sort {$alt_d1{$a} <=> $alt_d1{$b} } keys %alt_d1;
-    my $best_alt = $sorted_alts[0];
-    print "  alt  ", $best_alt, "  ", $alt_d1{$best_alt}, "  $good_alternative_count \n";
-  }else{
-    print "  none \n";
+  print $fhbest "# Bad denoms count: $bad_denoms_count\n";
+  my @scategories = sort {$a cmp $b} keys %category_counts;
+  # while (my($cat, $count) = each %category_counts) {
+  for my $cat (@scategories) {
+    print "$cat ", $category_counts{$cat}, "\n";
   }
 }
-print "bad denoms count: $bad_denoms_count\n";
-while (my($cat, $count) = each %category_counts) {
-  print "$cat $count\n";
-}
 
-
-
-exit;
-
-
-sub xxx{
-  my @cols = @{my $cls = shift};
-  my $Fparent_id = shift @cols;
-  my $Mparent_id = shift @cols;
-  my $agmr_denom = shift @cols;
-  my $agmr = shift @cols;
-  my $Fhgmr_denom = shift @cols;
-  my $Fhgmr = shift @cols;
-  my $Fr_denom = shift @cols;
-  my $Fr = shift @cols;
-  my $Mr_denom = shift @cols;
-  my $Mr = shift @cols;
-  my $d1_denom = shift @cols;
-  my $d1 = shift @cols;
-  my $d2_denom = shift @cols;
-  my $d2 = shift @cols;
- 
-}
 
 sub are_denoms_ok{
   my @cols = @{my $cls = shift};
   my $first = shift;
+  my $factor = shift;
   my ($median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom) = @_;
   my $last = $first + 11;
   my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d1_denom, $d1) = @cols[$first..$last];
@@ -266,16 +286,11 @@ sub are_denoms_ok{
 sub category{
   my @cols = @{my $cls = shift};
   my $first = shift;
-  my ($agmr_h, $max_ok_hgmr, $max_self_r, $max_ok_d1) = @_;
+  my ($max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1) = @_;
   my $last = $first + 11;
   my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d1_denom, $d1) = @cols[$first..$last];
-  # my $agmr_denom_ok = ($FMagmr_denom >= $factor*$median_matpat_agmr_denom);
-  # my $hgmr_denoms_ok = ($Fhgmr_denom >= $factor*$median_hgmr_denom  and  $Mhgmr_denom >= $factor*$median_hgmr_denom);
-  # my $r_denoms_ok = ($Fr_denom >= $factor*$median_r_denom  and  $Mr_denom >= $factor*$median_r_denom);
-  # my $d1_denom_ok = ($d1_denom >= $factor*$median_d1_denom);
-  # my $denoms_ok = ($agmr_denom_ok  and  $hgmr_denoms_ok  and  $r_denoms_ok  and  $d1_denom_ok);
   my $category_string = '';
-  $category_string .= ($FMagmr <= $agmr_h)? '0' : '1';
+  $category_string .= ($FMagmr <= $max_self_agmr)? '0' : '1';
   $category_string .= ' ';
   $category_string .= ($Fhgmr <= $max_ok_hgmr)? '0' : '1';
   $category_string .= ($Fr <= $max_self_r)? '0' : '1';
@@ -286,3 +301,24 @@ sub category{
   $category_string .= ($d1 <= $max_ok_d1)? '0' : '1';
   return $category_string;
 }
+
+####################################################
+
+# sub xxx{
+#   my @cols = @{my $cls = shift};
+#   my $Fparent_id = shift @cols;
+#   my $Mparent_id = shift @cols;
+#   my $agmr_denom = shift @cols;
+#   my $agmr = shift @cols;
+#   my $Fhgmr_denom = shift @cols;
+#   my $Fhgmr = shift @cols;
+#   my $Fr_denom = shift @cols;
+#   my $Fr = shift @cols;
+#   my $Mr_denom = shift @cols;
+#   my $Mr = shift @cols;
+#   my $d1_denom = shift @cols;
+#   my $d1 = shift @cols;
+#   my $d2_denom = shift @cols;
+#   my $d2 = shift @cols;
+ 
+# }
