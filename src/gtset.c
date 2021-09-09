@@ -262,17 +262,22 @@ GenotypesSet* construct_cleaned_genotypesset(const GenotypesSet* the_gtsset, dou
   Vlong* md_ok = construct_vlong_zeroes(md_counts->size);
   Vstr* cleaned_marker_ids = construct_vstr(1000);
   Vlong* cleaned_md_counts = construct_vlong(1000);
+  long mdsum_all = 0;
+  long mdsum_kept = 0;
   for(long i=0; i<md_counts->size; i++){
+    mdsum_all += md_counts->a[i];
+    //  fprintf(stderr, "%ld  %ld\n", i, md_counts->a[i]);
     if(md_counts->a[i] <= max_marker_md_fraction*the_gtsset->n_accessions){
       md_ok->a[i] = 1;
       n_markers_to_keep++;
+      mdsum_kept += md_counts->a[i];
       long marker_id_length = strlen(the_gtsset->marker_ids->a[i]);
       char* marker_id_to_keep = strcpy((char*)malloc((marker_id_length+1)*sizeof(char)), the_gtsset->marker_ids->a[i]);
       add_string_to_vstr(cleaned_marker_ids, marker_id_to_keep);
       add_long_to_vlong(cleaned_md_counts, md_counts->a[i]);
     }
   }
-
+  printf("# %ld %ld %10.5lf %10.5lf %10.5lf \n", mdsum_all, mdsum_kept, (double)mdsum_kept/(double)mdsum_all, (double)mdsum_all/(double)(md_counts->size*the_gtsset->n_accessions), (double)mdsum_kept/(double)(n_markers_to_keep*the_gtsset->n_accessions));
   Vaccession* the_accessions = construct_vaccession(the_gtsset->n_accessions); //(Accession*)malloc(the_gtsset->n_accessions*sizeof(Accession)); 
   for(long i=0; i<the_gtsset->n_accessions; i++){ // loop over accessions
     char* raw_gts = the_gtsset->accessions->a[i]->genotypes->a; // the string with all the genotypes for accession i
