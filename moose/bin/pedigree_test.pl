@@ -29,7 +29,7 @@ my $pedigree_table_filename = undef;
 
 # *****  parameters for processing dosages, eliminating low-quality markers
 my $delta = 0.05; # real-number genotypes are rounded to nearest integer (0,1,2) if within +- $delta
-my $max_bad_gt_fraction = 1.0; # exclude markers with greater than this proportion of missing data.
+my $max_bad_gt_fraction = 0.15; # exclude markers with greater than this proportion of missing data.
 
 # *****  output filenames:
 my $base_output_filename = 'out';
@@ -138,8 +138,8 @@ my @hgmr_denoms = ();
 my @hgmrs = ();
 my @r_denoms = ();
 my @rs = ();
-my @d1_denoms = ();
-my @d1s = ();
+my @d_denoms = ();
+my @ds = ();
 
 while (my ($j, $line) = each @lines) {
   my @cols = split(" ", $line);
@@ -150,19 +150,19 @@ while (my ($j, $line) = each @lines) {
   my $matpat_agmr = $cols[5];
   my ($mat_hgmr, $pat_hgmr) = @cols[7,11];
   my ($mat_r, $pat_r) = @cols[9,13];
-  my ($d1, $d2) = @cols[15,17];
-
+#  my ($d1, $d2) = @cols[15,17];
+  my $d = $cols[15];
   push @hgmr_denoms, @cols[6,10];
   push @hgmrs, ($mat_hgmr, $pat_hgmr);
   push @r_denoms, @cols[8,12];
   push @rs, ($mat_r, $pat_r);
-  push @d1_denoms, $cols[14];
-  push @d1s, $d1;
+  push @d_denoms, $cols[14];
+  push @ds, $d;
 }
 my $median_matpat_agmr_denom = $matpat_agmrs[int(scalar @matpat_agmrs / 2)];
 my $median_hgmr_denom = $hgmr_denoms[int(scalar @hgmr_denoms / 2)];
 my $median_r_denom = $r_denoms[int(scalar @r_denoms / 2)];
-my $median_d1_denom = $d1_denoms[int(scalar @d1_denoms / 2)];
+my $median_d_denom = $d_denoms[int(scalar @d_denoms / 2)];
 
 $cluster1d_obj = Cluster1d->new({label => 'hgmr', xs => \@hgmrs, pow => $pow});
 ($n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt) = $cluster1d_obj->one_d_2cluster();
@@ -174,16 +174,21 @@ $cluster1d_obj = Cluster1d->new({label => 'r', xs => \@rs, pow => $pow});
 printf("clustering of    r: %5d  k-means: %5d below %5d above %8.6f, q: %6.4f;  kde: %5d below %5d above %8.6f.\n", $n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt);
 my $max_self_r = $km_h_opt;
 
-$cluster1d_obj = Cluster1d->new({label => 'd1', xs => \@d1s, pow => $pow});
+$cluster1d_obj = Cluster1d->new({label => 'd', xs => \@ds, pow => $pow});
 ($n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt) = $cluster1d_obj->one_d_2cluster();
-printf("clustering of   d1: %5d  k-means: %5d below %5d above %8.6f, q: %6.4f;  kde: %5d below %5d above %8.6f.\n", $n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt);
-my $max_ok_d1 = $km_h_opt;
+printf("clustering of   d: %5d  k-means: %5d below %5d above %8.6f, q: %6.4f;  kde: %5d below %5d above %8.6f.\n", $n_pts, $km_n_L, $km_n_R, $km_h_opt, $q, $kde_n_L, $kde_n_R, $kde_h_opt);
+my $max_ok_d = $km_h_opt;
 
 # *****  Look at alternative pedigrees if requested
 if ($find_alternatives > 0) {
+  $max_self_agmr = sprintf("%.6f", $max_self_agmr);
+  $max_ok_hgmr = sprintf("%.6f", $max_ok_hgmr);
+  $max_self_r = sprintf("%.6f", $max_self_r);
+  $max_ok_d = sprintf("%.6f", $max_ok_d);
+    
   $gtfilename = 'genotype_matrix_out';
   $command = "~/simgtsrch/src/pedigree_test -g $gtfilename -p $pedigree_table_filename  -w $delta  -x $max_bad_gt_fraction -A $find_alternatives -o $c_output_filename_alt ";
-  $command .= " -a $max_self_agmr  -h $max_ok_hgmr -r $max_self_r -D $max_ok_d1";
+  $command .= " -a $max_self_agmr  -h $max_ok_hgmr -r $max_self_r -D $max_ok_d";
   print "# command: $command \n";
   system "$command";
 
@@ -201,12 +206,12 @@ if ($find_alternatives > 0) {
     my ($acc_id, $acc_md) = @cols[0,1];
     my ($mat_id, $pat_id) = @cols[2,3];
     my $id_pair = "$mat_id $pat_id";
-    my $ped_d1 = $cols[15];
+    my $ped_d = $cols[15];
     my $category_string = '';
-    my %allped_d1 = ();
-    my $ok_pedigrees_count = 0; # counts all ok (small d1) pedigrees for this accession, both pedigree from table and alternatives.
-    my $denoms_ok = are_denoms_ok(\@cols, 4, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, $factor);
-    $category_string = ($denoms_ok)? category(\@cols, 4, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1) : 'x xx xx x';
+    my %allped_d = ();
+    my $ok_pedigrees_count = 0; # counts all ok (small d) pedigrees for this accession, both pedigree from table and alternatives.
+    my $denoms_ok = are_denoms_ok(\@cols, 4, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d_denom, $factor);
+    $category_string = ($denoms_ok)? category(\@cols, 4, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d) : 'x xx xx x';
     my $ped_str = "  ped  $id_pair  $category_string";
     if ($denoms_ok) {
       $ok_pedigrees_count++ if ($category_string eq '0 00 00 0'  or  $category_string eq '1 01 01 0');
@@ -214,46 +219,61 @@ if ($find_alternatives > 0) {
     } else {
       $bad_denoms_count++;
     }
-    $allped_d1{$ped_str} = $ped_d1;
+    $allped_d{$ped_str} = $ped_d;
 
     # alternative pedigrees:
-    my $n_alternatives = $cols[18] // 0; #
-    my %okalt_d1 = ();
+    my $n_alternatives = $cols[16] // 0; #
+    my %okalt_d = ();
     for (my $i = 0; $i < $n_alternatives; $i++) {
-      my $first = 21 + $i*16;
+      my $first = 19 + $i*14;
       my $alt_category_string = '';
       my $alt_id_pair = $cols[$first-2] . ' ' . $cols[$first-1];
-      my $alt_d1 = $cols[$first+11];
-      $denoms_ok = are_denoms_ok(\@cols, $first, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom, $factor);
+      my $alt_d = $cols[$first+11];
+      $denoms_ok = are_denoms_ok(\@cols, $first, $factor, $median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d_denom, $factor);
       if ($denoms_ok) {
-	$alt_category_string = category(\@cols, $first, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1);
+	$alt_category_string = category(\@cols, $first, $max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d);
 	if ($alt_category_string eq '0 00 00 0'  or $alt_category_string eq '1 01 01 0') {
 	  $ok_pedigrees_count++;
-	  $okalt_d1{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d1;
+	  $okalt_d{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d;
 	}
-      }else{
+      } else {
 	$alt_category_string = 'x xx xx x';
       }
-       $allped_d1{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d1;
+      $allped_d{"  alt  $alt_id_pair  $alt_category_string"} = $alt_d;
     }
 
+    
     my $output_string = $cols[0] . "  $ok_pedigrees_count";
-    my @sorted_alts = sort {$okalt_d1{$a} <=> $okalt_d1{$b} } keys %okalt_d1;
-    my @sorted_allpeds = sort {$allped_d1{$a} <=> $allped_d1{$b} } keys %allped_d1;
+    my @sorted_alts = #sort {$okalt_d{$a} <=> $okalt_d{$b} } keys %okalt_d;
+    sort { # sort first by number of x's (low to high), then by d (low_to_high)
+  my $acat = ($a =~ /(\S+\s+\S+\s+\S+\s+\S+)\s*$/)? $1 : 'x xx xx x';
+  my $bcat = ($b =~ /(\S+\s+\S+\s+\S+\s+\S+)\s*$/)? $1 : 'x xx xx x';
+  my $ax = () = $acat =~ /x/g;
+  my $bx = () = $bcat =~ /x/g;
+  (($ax <=> $bx) or ($okalt_d{$a} <=> $okalt_d{$b})); } keys %okalt_d;
+    
+    my @sorted_allpeds = # sort {$allped_d{$a} <=> $allped_d{$b} } keys %allped_d;
+ sort {
+  my $acat = ($a =~ /(\S+\s+\S+\s+\S+\s+\S+)\s*$/)? $1 : 'x xx xx x';
+  my $bcat = ($b =~ /(\S+\s+\S+\s+\S+\s+\S+)\s*$/)? $1 : 'x xx xx x';
+  my $ax = () = $acat =~ /x/g;
+  my $bx = () = $bcat =~ /x/g;
+  (($ax <=> $bx) or ($allped_d{$a} <=> $allped_d{$b})); } keys %allped_d;
+      
     if ($category_string eq '0 00 00 0'  or  $category_string eq '1 01 01 0') { # pedigree from table is 'good'
-      $output_string .= "  ped" . $ped_str . "  " . $ped_d1; # ped  " . $id_pair . "  $category_string  $ped_d1";
+      $output_string .= "  ped" . $ped_str . "  " . $ped_d; # ped  " . $id_pair . "  $category_string  $ped_d";
       if (scalar @sorted_alts > 0) {
-	$output_string .= $sorted_alts[0] . "  " . $okalt_d1{$sorted_alts[0]};
+	$output_string .= $sorted_alts[0] . "  " . $okalt_d{$sorted_alts[0]};
       }
     } elsif (scalar @sorted_alts > 0) {
       $output_string .= "  alt";
       for (my $i = 0; $i < min(scalar @sorted_alts, 2); $i++) {
-	$output_string .= $sorted_alts[$i] . "  " . $okalt_d1{$sorted_alts[$i]};
+	$output_string .= $sorted_alts[$i] . "  " . $okalt_d{$sorted_alts[$i]};
       }
     } else {
       $output_string .= "  none";
       for (my $i = 0; $i < min(scalar @sorted_allpeds, 2); $i++) {
-	$output_string .= $sorted_allpeds[$i] . "  " . $allped_d1{$sorted_allpeds[$i]};
+	$output_string .= $sorted_allpeds[$i] . "  " . $allped_d{$sorted_allpeds[$i]};
       }
     }
     $output_string .= "\n";
@@ -272,23 +292,23 @@ sub are_denoms_ok{
   my @cols = @{my $cls = shift};
   my $first = shift;
   my $factor = shift;
-  my ($median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d1_denom) = @_;
+  my ($median_matpat_agmr_denom, $median_hgmr_denom, $median_r_denom, $median_d_denom) = @_;
   my $last = $first + 11;
-  my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d1_denom, $d1) = @cols[$first..$last];
+  my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d_denom, $d) = @cols[$first..$last];
   my $agmr_denom_ok = ($FMagmr_denom >= $factor*$median_matpat_agmr_denom);
   my $hgmr_denoms_ok = ($Fhgmr_denom >= $factor*$median_hgmr_denom  and  $Mhgmr_denom >= $factor*$median_hgmr_denom);
   my $r_denoms_ok = ($Fr_denom >= $factor*$median_r_denom  and  $Mr_denom >= $factor*$median_r_denom);
-  my $d1_denom_ok = ($d1_denom >= $factor*$median_d1_denom);
-  my $denoms_ok = ($agmr_denom_ok  and  $hgmr_denoms_ok  and  $r_denoms_ok  and  $d1_denom_ok);
+  my $d_denom_ok = ($d_denom >= $factor*$median_d_denom);
+  my $denoms_ok = ($agmr_denom_ok  and  $hgmr_denoms_ok  and  $r_denoms_ok  and  $d_denom_ok);
   return $denoms_ok;
 }
 
 sub category{
   my @cols = @{my $cls = shift};
   my $first = shift;
-  my ($max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d1) = @_;
+  my ($max_self_agmr, $max_ok_hgmr, $max_self_r, $max_ok_d) = @_;
   my $last = $first + 11;
-  my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d1_denom, $d1) = @cols[$first..$last];
+  my ($FMagmr_denom, $FMagmr, $Fhgmr_denom, $Fhgmr, $Fr_denom, $Fr, $Mhgmr_denom, $Mhgmr, $Mr_denom, $Mr, $d_denom, $d) = @cols[$first..$last];
   my $category_string = '';
   $category_string .= ($FMagmr <= $max_self_agmr)? '0' : '1';
   $category_string .= ' ';
@@ -298,9 +318,10 @@ sub category{
   $category_string .= ($Mhgmr <= $max_ok_hgmr)? '0' : '1';
   $category_string .= ($Mr <= $max_self_r)? '0' : '1';
   $category_string .= ' ';
-  $category_string .= ($d1 <= $max_ok_d1)? '0' : '1';
+  $category_string .= ($d <= $max_ok_d)? '0' : '1';
   return $category_string;
 }
+
 
 ####################################################
 
