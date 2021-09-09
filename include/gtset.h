@@ -4,7 +4,6 @@
 #include <assert.h>
 #include "vect.h"
 
-
 typedef struct{
   Vchar* id;
   long index; // the index in the accessions array of GenotypesSet
