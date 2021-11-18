@@ -110,14 +110,6 @@ Vmci** find_matches(Vgts* the_vgts, Chunk_pattern_ids* the_cpi, long min_usable_
 // Vmci** find_matches_alt(Vgts* the_vgts, Vlong** match_counts, long n_chunks, long chunk_size);
 long print_results(Vgts* the_vgts, Vmci** query_vmcis, FILE* ostream);
 
-// hgmr stuff
-/* Vlong* find_chunk_hmatch_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions, Vlong** accidx_hgtmatchcounts); */
-/* long find_matches_ah(Vgts* the_vgts, Chunk_pattern_ids* the_cpi, FILE* ostream); */
-
-/* Vlong* get_hmatches(long chunk_size, long ipat, long min_homozyg_count); */
-/* Vlong* matching_ipats(Vlong* ipats, long i012); */
-/* Vlong** get_all_hmatches(long chunk_size, long min_homozyg_count); */
-/* long hmatches01(long chunk_size, long pat1, long pat2, long* hnumer); */
 // *************************  end of declarations  **********************************************
 
 
@@ -137,7 +129,7 @@ main(int argc, char *argv[])
   double max_md_factor = 1.0; // multiplies n_markers/chunk_size
   long max_md_gts;
   long min_usable_chunks = 5;
-double max_est_agmr = 0.2;
+  double max_est_agmr = 0.2;
 
   char* rparam_buf;
   size_t rparam_len;
@@ -170,12 +162,7 @@ double max_est_agmr = 0.2;
     // e: max estimated agmr. Default: 0.2 (Calculate agmr only if quick est. is < this value.)
     // s: random number seed. Default: get seed from clock.
     // x: max missing data factor (default: 1 -> max_md_gts = n_markers/chunk_size )
-    // a: switch to invoke alternative (slightly slower) method.
-    // m: switch to calculate and use exact number of usable chunks for each accession pair (slow).
  
-    // H: switch to do quick approx. hgmr calculation (doesn't work well).
-    // h: min hmatch fraction (ignored unless -H)
-    // z: min homozyg count (ignored unless -H)
     switch(c){
     case 'i':
       input_filename = optarg;
@@ -323,12 +310,12 @@ double max_est_agmr = 0.2;
       char* gtstr = (char*)malloc(nread*sizeof(char)); 
       sscanf(line, "%s %s", id, gtstr);
       if(strlen(gtstr) != n_markers) exit(EXIT_FAILURE); // check number of genotypes is same.
-        Gts* the_gts = construct_gts(id, gtstr);
-        if(the_gts->missing_data_count <= max_md_gts){ 
-	  add_gts_to_vgts(the_vgts, the_gts);
-	}else{
-	  add_gts_to_vgts(the_bad_vgts, the_gts);
-	} 
+      Gts* the_gts = construct_gts(id, gtstr);
+      if(the_gts->missing_data_count <= max_md_gts){ 
+	add_gts_to_vgts(the_vgts, the_gts);
+      }else{
+	add_gts_to_vgts(the_bad_vgts, the_gts);
+      } 
       if(max_number_of_accessions > 0  &&  the_vgts->size >= max_number_of_accessions) break;
     }
   }
@@ -363,13 +350,13 @@ double max_est_agmr = 0.2;
   long true_agmr_count;
   start = hi_res_time();
   //  if(1 || !do_H){
-    Vmci** query_vmcis;
-    query_vmcis = find_matches(the_vgts, the_cpi, min_usable_chunks, max_est_agmr);
-      true_agmr_count = print_results(the_vgts, query_vmcis, out_stream);
-    for(long i=0; i< the_vgts->size; i++){
-      free_vmci(query_vmcis[i]);
-    }
-    free(query_vmcis);
+  Vmci** query_vmcis;
+  query_vmcis = find_matches(the_vgts, the_cpi, min_usable_chunks, max_est_agmr);
+  true_agmr_count = print_results(the_vgts, query_vmcis, out_stream);
+  for(long i=0; i< the_vgts->size; i++){
+    free_vmci(query_vmcis[i]);
+  }
+  free(query_vmcis);
   fprintf(stderr, "# time to find candidate matches and %ld true agmrs: %9.3f\n", true_agmr_count, hi_res_time() - start);
   fclose(out_stream);
   free_vlong(marker_indices);
@@ -378,13 +365,15 @@ double max_est_agmr = 0.2;
   fprintf(stderr, "# total simsearch run time: %9.3f\n", hi_res_time() - start0);
   exit(EXIT_SUCCESS);
 }
-  
+
+// **********************************************************************************************
 // **********************  end of main  *********************************************************
+// **********************************************************************************************
 
 
 // *******************  function definitions  ***************************************************
-// *****  Gts  ****************************************************
 
+// *****  Gts  ****************************************************
 Gts* construct_gts(char* id, char* gtset){
   Gts* the_gts = (Gts*)malloc(1*sizeof(Gts));
   the_gts->id = id;
@@ -433,7 +422,7 @@ long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long 
 	if(l == 0  ||  l == 2){
 	  n_homozygs++;
 	}
-      }else{ // missing data in (at least) one of the chunks
+      }else{ // missing data in (at least) one of the markers in the chunk
 	i_pat = n_patterns;
 	gts_mdchunk_count++;
 	n_homozygs = -1;
@@ -626,7 +615,8 @@ void print_chunk_pattern_ids(Chunk_pattern_ids* the_cpi, FILE* ostream){
 Vlong* find_chunk_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_accessions){ //, Vlong** accidx_hmatchcounts){
   long n_patterns = the_cpi->n_patterns;
   Vlong* chunk_pats = the_gts->chunk_patterns;
-  Vlong* accidx_matchcounts = construct_vlong_zeroes(n_accessions);
+  //  Vlong* accidx_matchcounts = construct_vlong_zeroes(n_accessions);
+    Vlong* accidx_matchcounts = construct_vlong_zeroes(the_gts->index); //   n_accessions);
  
   for(long i_chunk=0; i_chunk < chunk_pats->size; i_chunk++){
     long the_pat = chunk_pats->a[i_chunk];  
@@ -634,9 +624,22 @@ Vlong* find_chunk_match_counts(Gts* the_gts, Chunk_pattern_ids* the_cpi, long n_
     // (patterns 0..n_patterns-1 are good, n_patterns=3^chunk_size is the pattern for missing data )
     if(the_pat == n_patterns){ // missing data in this chunk 
     }else{ // the_pat = 0..n_patterns-1 (good data)
-      for(long i=0; i<chunk_match_idxs->size; i++){
+      if(0){
+      // just get the counts for matches with index > index of the_gts
+      // since those are the only ones used in find_matches. (slightly faster)
+      for(long i=chunk_match_idxs->size-1; i>=0; i--){
 	long accidx = chunk_match_idxs->a[i]; // index of one of the accessions matching on this chunk
+	if(accidx <= the_gts->index) break;
 	accidx_matchcounts->a[accidx]++; 
+      }
+      }else{
+ // just get the counts for matches with index < index of the_gts
+      // since those are the only ones used in find_matches. (slightly faster)
+      for(long i=0; i<chunk_match_idxs->size; i++){	  
+	long accidx = chunk_match_idxs->a[i]; // index of one of the accessions matching on this chunk
+	if(accidx >= the_gts->index) break;
+	accidx_matchcounts->a[accidx]++; // accidx here is < the_gts->index
+      }
       }
     }
   }
@@ -746,13 +749,14 @@ Vmci** find_matches(Vgts* the_vgts, Chunk_pattern_ids* the_cpi, long min_usable_
     Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size);
     fcmc_ticks += clock() - ticks_before_fcmc;
     
-    for(long i_match = i_query+1; i_match<the_vgts->size; i_match++){
+    //    for(long i_match = i_query+1; i_match<the_vgts->size; i_match++){
+      for (long i_match = 0; i_match < i_query; i_match++){
       long matching_chunk_count = chunk_match_counts->a[i_match];
       long match_md_chunk_count = the_vgts->a[i_match]->md_chunk_count;    
       double usable_chunk_count = (double)((n_chunks-q_md_chunk_count)*(n_chunks-match_md_chunk_count))/(double)n_chunks; // estimate
       
       if( //( usable_chunk_count >= 0*min_usable_chunks ) &&
-	  (matching_chunk_count > min_matching_chunk_fraction*usable_chunk_count) ){
+	 (matching_chunk_count > min_matching_chunk_fraction*usable_chunk_count) ){
 	double matching_chunk_fraction = (double)matching_chunk_count/usable_chunk_count; // fraction matching chunks
 	double est_agmr = 1.0 - pow(matching_chunk_fraction, 1.0/chunk_size);
 	double true_hgmr;
@@ -781,14 +785,13 @@ long print_results(Vgts* the_vgts, Vmci** query_vmcis, FILE* ostream){
       //  long match_idx = the_mci->match_index; //(the_mci->query_index == i_q)? the_mci->match_index : the_mci->query_index;
       Gts* q_gts = the_vgts->a[i_q];
       Gts* m_gts = the_vgts->a[the_mci->match_index];
-      fprintf(ostream, "%5ld %30s %30s  %5.2f  %4ld  %7.4f  %7.4f    %7.4f  %5ld %5ld  %5ld %5ld\n", //  %7.4f\n",
+      fprintf(ostream, "%5ld %30s %30s  %5.2f  %4ld  %7.4f  %7.4f    %7.4f  ", //  %7.4f\n",
 	      i_q,  the_vgts->a[i_q]->id,  the_vgts->a[the_mci->match_index]->id,
 	      the_mci->usable_chunks,  the_mci->n_matching_chunks,
 	      the_mci->est_agmr,  the_mci->agmr,
-	      the_mci->hgmr,
-	      q_gts->missing_data_count, q_gts->md_chunk_count, m_gts->missing_data_count, m_gts->md_chunk_count
-	      //     the_vgts->a[i_q]->md_chunk_count, the_vgts->a[the_mci->match_index]->md_chunk_count
-	      );
+	      the_mci->hgmr);
+      //   fprintf(ostream, "%5ld %5ld %5ld %5ld", q_gts->missing_data_count, q_gts->md_chunk_count, m_gts->missing_data_count, m_gts->md_chunk_count );
+      fprintf(ostream, "\n");
       true_agmr_count++;
     }
   }
