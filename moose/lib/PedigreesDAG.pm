@@ -72,10 +72,11 @@ sub BUILD{
     }
   }
 
+ 
   my ($acyclic, $cyclic_id_string) = $self->is_it_acyclic();
-  print STDERR "# Is it acyclic:  $acyclic \n";
-  print STDERR "# Childless accessions with ancestral cyclicities: $cyclic_id_string \n" if($acyclic == 0);
-  print STDERR "# N ids: ", scalar keys %{$self->id_node()}, " N with no offspring: ", scalar keys %{$self->childless_ids()}, "\n";
+  my $info_string = "# Is it acyclic:  $acyclic \n";
+  $info_string .= "# Childless accessions with ancestral cyclicities: $cyclic_id_string \n" if($acyclic == 0);
+  $info_string .= "# N ids: ", scalar keys %{$self->id_node()}, " N with no offspring: ", scalar keys %{$self->childless_ids()}, "\n";
 }
 
 sub add_node{
