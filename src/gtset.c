@@ -1,3 +1,4 @@
+#include <math.h>
 #include "gtset.h"
 
 extern int do_checks_flag; // option -c sets this to 1 to do some checks.
@@ -256,7 +257,24 @@ void check_genotypesset(GenotypesSet* gtss, double max_marker_md_fraction){
 
 GenotypesSet* construct_cleaned_genotypesset(const GenotypesSet* the_gtsset, double max_marker_md_fraction){
   Vlong* md_counts = the_gtsset->marker_missing_data_counts;
-
+  long n_accs = the_gtsset->n_accessions;
+  long* mdcount_histogram = (long*)calloc(n_accs+1, sizeof(long));
+  if(max_marker_md_fraction < 0){
+    double factor = -1*max_marker_md_fraction;
+    for(long i=0; i< md_counts->size; i++){
+      mdcount_histogram[md_counts->a[i]]++;
+    }
+    long mrkrs_so_far = 0;
+    long median_md_count;
+    for(long i=0; i<=n_accs; i++){
+      mrkrs_so_far += mdcount_histogram[i];
+      if(mrkrs_so_far > 0.5*md_counts->size){
+	median_md_count = i;
+	break;
+      }
+    }
+    max_marker_md_fraction = factor*(double)median_md_count/(double)n_accs;
+  }
   // identify the markers to keep:
   long n_markers_to_keep = 0;
   Vlong* md_ok = construct_vlong_zeroes(md_counts->size);
@@ -266,7 +284,6 @@ GenotypesSet* construct_cleaned_genotypesset(const GenotypesSet* the_gtsset, dou
   long mdsum_kept = 0;
   for(long i=0; i<md_counts->size; i++){
     mdsum_all += md_counts->a[i];
-    //  fprintf(stderr, "%ld  %ld\n", i, md_counts->a[i]);
     if(md_counts->a[i] <= max_marker_md_fraction*the_gtsset->n_accessions){
       md_ok->a[i] = 1;
       n_markers_to_keep++;
@@ -277,7 +294,12 @@ GenotypesSet* construct_cleaned_genotypesset(const GenotypesSet* the_gtsset, dou
       add_long_to_vlong(cleaned_md_counts, md_counts->a[i]);
     }
   }
-  printf("# %ld %ld %10.5lf %10.5lf %10.5lf \n", mdsum_all, mdsum_kept, (double)mdsum_kept/(double)mdsum_all, (double)mdsum_all/(double)(md_counts->size*the_gtsset->n_accessions), (double)mdsum_kept/(double)(n_markers_to_keep*the_gtsset->n_accessions));
+  double raw_md_fraction = (double)mdsum_all/(double)(md_counts->size*n_accs);
+  double cleaned_md_fraction = (double)mdsum_kept/(double)(n_markers_to_keep*n_accs);
+  fprintf(stderr, "# Removing markers with fraction of missing data greater than: %7.3lf\n", max_marker_md_fraction);
+  fprintf(stderr, "# Raw data has %ld markers, with missing data fraction of %7.3lf\n", md_counts->size, raw_md_fraction);
+  fprintf(stderr, "# Cleaned data has %ld markers, with missing data fraction of: %7.3lf\n", n_markers_to_keep, cleaned_md_fraction);
+
   Vaccession* the_accessions = construct_vaccession(the_gtsset->n_accessions); //(Accession*)malloc(the_gtsset->n_accessions*sizeof(Accession)); 
   for(long i=0; i<the_gtsset->n_accessions; i++){ // loop over accessions
     char* raw_gts = the_gtsset->accessions->a[i]->genotypes->a; // the string with all the genotypes for accession i

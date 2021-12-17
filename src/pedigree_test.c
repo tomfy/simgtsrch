@@ -115,8 +115,9 @@ main(int argc, char *argv[])
 	exit(EXIT_FAILURE);
       }else{
 	max_marker_missing_data = atof(optarg);
-	if (max_marker_missing_data < 0) exit(EXIT_FAILURE);
-      }
+	if (max_marker_missing_data < 0){
+	  printf("# max missing data fraction in markers will be set automatically.\n");
+	}}
       break;
     case 'a': // agmr12 < this -> looks like self
       if(optarg == 0){
@@ -144,7 +145,7 @@ main(int argc, char *argv[])
 	if (max_self_r < 0) exit(EXIT_FAILURE);
       }
       break;
-    case 'D': // d > this is poor candidate triple of parents and offspring
+    case 'D': // d > this argument means this a is poor candidate triple of parents and offspring
       if(optarg == 0){
 	perror("option x requires a numerical argument > 0\n");
 	exit(EXIT_FAILURE);
@@ -180,6 +181,8 @@ main(int argc, char *argv[])
     perror("must specify pedigrees filename: -i <filename>");
     exit(EXIT_FAILURE);
   }
+
+  // exit(EXIT_FAILURE);
   
   FILE *o_stream = NULL;
   o_stream = fopen(pedigree_test_output_filename, "w");
@@ -187,9 +190,11 @@ main(int argc, char *argv[])
     fprintf(stderr, "Failed to open %s for writing.\n", pedigree_test_output_filename);
     exit(EXIT_FAILURE);
   }
-  fprintf(stderr, "# genotypes file type: %d\n", genotype_file_type);
-  fprintf(stderr, "# genotypes file: %s  pedigree file: %s  delta: %5.3lf  max marker missing data: %5.3lf  output file: %s\n",
-	  genotypes_filename, pedigrees_filename, delta, max_marker_missing_data, pedigree_test_output_filename);
+  // fprintf(stderr, "# genotypes file type: %d\n", genotype_file_type);
+  char* geno_file_type = (genotype_file_type == DOSAGES)? "dosages" : "genotypes";
+  fprintf(stderr, "# genotypes file type/name: %s / %s.  delta: %5.3lf  max marker missing data: %5.3lf\n",
+	  geno_file_type, genotypes_filename, delta, max_marker_missing_data);
+  fprintf(stderr, "# pedigrees filename: %s, output filename: %s \n", pedigrees_filename, pedigree_test_output_filename);
 
   
   // *****  done processing command line  *****
@@ -202,7 +207,7 @@ main(int argc, char *argv[])
     GenotypesSet* the_raw_genotypes_set = read_dosages_file_and_store(g_stream, delta);
   
     fclose(g_stream);
-    print_genotypesset_summary_info(stderr, the_raw_genotypes_set);
+    // print_genotypesset_summary_info(stderr, the_raw_genotypes_set); 
    
     if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
   
@@ -219,7 +224,7 @@ main(int argc, char *argv[])
     free_genotypesset(the_raw_genotypes_set); // free the raw genotypes set; use the cleaned one.
     print_genotypesset_summary_info(stderr, the_genotypes_set);
 
-    fprintf(stderr, "# Removing markers with excessive fraction (> %5.3lf) missing data.\n", max_marker_missing_data);
+    //  fprintf(stderr, "# Removing markers with excessive fraction (> %5.3lf) missing data.\n", max_marker_missing_data);
     if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
     //   fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %10.4lf sec.\n", n_markers_good, hi_res_time() - t_start);
     FILE* og_stream = fopen(genotypes_matrix_output_filename, "w");
@@ -260,7 +265,7 @@ main(int argc, char *argv[])
     }
     Pedigree_stats* the_pedigree_stats = calculate_pedigree_stats(pedigrees->a[i]); //, nd0, nd1, nd2); //, the_cleaned_genotypes_set);
     // assert(strcmp(pedigrees->a[i]->Accession->id, pedigrees->a[i]->A->id->a) == 0);
-    fprintf(o_stream, "%s  %ld  %s %s  ",
+    fprintf(o_stream, "%20s %5ld %20s %20s  ",
 	    pedigrees->a[i]->A->id->a, pedigrees->a[i]->A->missing_data_count,
 	    pedigrees->a[i]->F->id->a, pedigrees->a[i]->M->id->a);
     print_pedigree_stats(o_stream, the_pedigree_stats);
@@ -271,8 +276,7 @@ main(int argc, char *argv[])
     if(do_alternative_pedigrees > 0){
       if((do_alternative_pedigrees == 2) || (pedigree_ok(the_pedigree_stats, max_self_agmr12, max_ok_hgmr, max_self_r, max_ok_d) == 0)){
 	//   fprintf(stderr, "About to get alt. pedigrees. max_ok_hgmr: %8.4lf,  max_ok_d: %8.4lf \n", max_ok_hgmr, max_ok_d);
-	Vpedigree* alt_pedigrees = pedigree_alternatives(pedigrees->a[i], the_genotypes_set, parent_idxs,
-							 max_ok_hgmr, max_ok_d);
+	Vpedigree* alt_pedigrees = pedigree_alternatives(pedigrees->a[i], the_genotypes_set, parent_idxs, max_ok_hgmr, max_ok_d);
 	print_pedigree_alternatives(o_stream, alt_pedigrees);
       }
     }

@@ -689,11 +689,7 @@ Pedigree_stats* triple_counts_x(char* gts1, char* gts2, char* proggts, //
 /* } */
 
 Pedigree_stats* calculate_pedigree_stats(Pedigree* the_pedigree){ //, long* d0counts, long* d1counts, long* d2counts){ //, GenotypesSet* the_gtsset){
-  return triple_counts(the_pedigree->F->genotypes->a,
-		       the_pedigree->M->genotypes->a,
-		       the_pedigree->A->genotypes->a
-			 //, d0counts, d1counts, d2counts
-			 );			 
+  return triple_counts( the_pedigree->F->genotypes->a,  the_pedigree->M->genotypes->a,  the_pedigree->A->genotypes->a );			 
 }
 
 
@@ -769,12 +765,12 @@ const Vaccession* accessions_with_offspring_x(const Vpedigree* the_vped, const G
 /* } */
 
 void print_pedigree_stats(FILE* fh, Pedigree_stats* the_pedigree_stats){
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->agmr12.d, (double)(the_pedigree_stats->agmr12.n+1)/(double)(the_pedigree_stats->agmr12.d+1));
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->par1_hgmr.d, (double)(the_pedigree_stats->par1_hgmr.n+1)/(double)(the_pedigree_stats->par1_hgmr.d+1));
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->par1_R.d, (double)(the_pedigree_stats->par1_R.n+1)/(double)(the_pedigree_stats->par1_R.d+1));
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->par2_hgmr.d, (double)(the_pedigree_stats->par2_hgmr.n+1)/(double)(the_pedigree_stats->par2_hgmr.d+1));
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->par2_R.d, (double)(the_pedigree_stats->par2_R.n+1)/(double)(the_pedigree_stats->par2_R.d+1));
-  fprintf(fh, "%4ld %6.5lf ", the_pedigree_stats->d.d, (double)(the_pedigree_stats->d.n+1)/(double)(the_pedigree_stats->d.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->agmr12.d, (double)(the_pedigree_stats->agmr12.n+1)/(double)(the_pedigree_stats->agmr12.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->par1_hgmr.d, (double)(the_pedigree_stats->par1_hgmr.n+1)/(double)(the_pedigree_stats->par1_hgmr.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->par1_R.d, (double)(the_pedigree_stats->par1_R.n+1)/(double)(the_pedigree_stats->par1_R.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->par2_hgmr.d, (double)(the_pedigree_stats->par2_hgmr.n+1)/(double)(the_pedigree_stats->par2_hgmr.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->par2_R.d, (double)(the_pedigree_stats->par2_R.n+1)/(double)(the_pedigree_stats->par2_R.d+1));
+  fprintf(fh, "%5ld %6.5lf  ", the_pedigree_stats->d.d, (double)(the_pedigree_stats->d.n+1)/(double)(the_pedigree_stats->d.d+1));
 }
 
 double get_agmr12(Pedigree_stats* p){
@@ -803,10 +799,10 @@ double get_d(Pedigree_stats* p){
 }
 
 void print_pedigree_alternatives(FILE* fh, const Vpedigree* alt_pedigrees){
-  fprintf(fh, " %ld  ", alt_pedigrees->size);
+  fprintf(fh, " %3ld  ", alt_pedigrees->size);
   for(long i=0; i<alt_pedigrees->size; i++){
     Pedigree* alt_pedigree = alt_pedigrees->a[i];
-    fprintf(fh, "%s %s ", alt_pedigree->F->id->a, alt_pedigree->M->id->a);
+    fprintf(fh, "%20s %20s ", alt_pedigree->F->id->a, alt_pedigree->M->id->a);
     print_pedigree_stats(fh, alt_pedigree->pedigree_stats);
   } 
 }
@@ -823,7 +819,7 @@ long pedigree_ok(Pedigree_stats* p, double max_self_agmr12, double max_ok_hgmr, 
   /* 	  max_self_agmr12, max_ok_hgmr, max_self_r, max_ok_d1, */
   /* 	  agmr12, hgmr1, r1, hgmr2, r2, d1); */
   if(agmr12 <= max_self_agmr12){ // pedigree says self (or parents very similar)
-    if( (agmr12 <= max_self_agmr12) && (hgmr1 <= max_ok_hgmr) && (hgmr2 <= max_ok_hgmr) && (r1 <= max_self_r) && (r2 <= max_self_r) && (d <= max_ok_d) ){
+    if( /*(agmr12 <= max_self_agmr12) && */ (hgmr1 <= max_ok_hgmr) && (hgmr2 <= max_ok_hgmr) && (r1 <= max_self_r) && (r2 <= max_self_r) && (d <= max_ok_d) ){
       result = 1;
     }
   }else{ // pedigree says biparental
