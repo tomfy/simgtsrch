@@ -12,7 +12,7 @@
 #define UNKNOWN -1
 #define DOSAGES 0
 #define GENOTYPES 1
-#define UNKNOWN_FILE_TYPE 2
+//#define UNKNOWN_FILE_TYPE 2
 #define DO_ASSERT 1
 
 //***********************************************************************************************
@@ -270,6 +270,8 @@ main(int argc, char *argv[])
  
   // *****  done processing command line  *****
 
+
+  
   double start;
   start = hi_res_time();
 
@@ -277,15 +279,14 @@ main(int argc, char *argv[])
   Vgts* the_vgts;
 
   long genotype_file_type = determine_file_format(input_filename);
-  if(genotype_file_type == UNKNOWN_FILE_TYPE){
+  if(genotype_file_type == UNKNOWN){
     fprintf(stderr, "# Input file has unknown format; exiting.\n");
     exit(EXIT_FAILURE);
   }else if(genotype_file_type == DOSAGES){
     fprintf(stderr, "# Input file type is dosages.\n");
      GenotypesSet* the_raw_genotypes_set = read_dosages_file_and_store(in_stream, delta);
-    if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
-  
-    fprintf(stderr, "# Done reading in genotype data. %ld accessions and %ld markers. Time: %10.4lf sec.\n",
+    if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set, max_marker_missing_data); 
+    fprintf(stderr, "# Done reading in dosage data. %ld accessions and %ld markers. Time: %10.4lf sec.\n",
 	    the_raw_genotypes_set->n_accessions, the_raw_genotypes_set->n_markers, hi_res_time() - start);
  
     // *****  clean genotypes set, i.e. remove markers with high missing data  ****
@@ -296,89 +297,21 @@ main(int argc, char *argv[])
     max_md_gts = (long)(max_md_factor*(double)n_markers/(double)chunk_size);
     the_vgts = construct_vgts_from_genotypesset(the_genotypes_set, max_md_gts);
   }else{
-
     fprintf(stderr, "# Input file type is genotypes.\n");
     // ***** *****  read in genotype matrix file  ***** *****
-    /* if(0){ */
-    /* char *line = NULL; */
-    /* size_t len = 0; */
-    /* ssize_t nread; */
-
-    /* if (in_stream == NULL) { */
-    /*   perror("fopen"); */
-    /*   exit(EXIT_FAILURE); */
-    /* } */
-
-    /* // *****  read first line: 'MARKER followed by marker ids  ***** */
-    /* nread = getline(&line, &len, in_stream); // read first line. should have 'MARKER' and marker ids.  */
-    /* char mrkr[64]; */
-    /* sscanf(line, "%s", mrkr); */
-    /* if(strcmp(mrkr, "MARKER") !=0){ */
-    /*   fprintf(stderr, "Start of first line: %s ; should be MARKER. Bye.\n", mrkr); // should start with 'MARKER' */
-    /*   exit(EXIT_FAILURE); */
-    /* }  */
-  
-    /* // ***** read rest of file and store genotype sets and ids in Gts objs.  ***** */
-    /* int max_accession_id_length = 200; */
-    /* int init_accessions_capacity = 100; // */
-    /* the_vgts = construct_vgts(init_accessions_capacity); */
-    /* Vgts* the_bad_vgts = construct_vgts(init_accessions_capacity); // for accessions with too much missing data */
-  
-    /* if((nread = getline(&line, &len, in_stream)) != -1){ // process first line with genotypes  */
-    /*   char* id = (char*)malloc(max_accession_id_length*sizeof(char)); */
-    /*   char* gtstr = (char*)malloc(nread*sizeof(char)); */
-    /*   char xxx[100]; */
-    /*   fprintf(stderr, "# strings read (should be 2): %d\n", sscanf(line, "%s %s %s", id, gtstr, xxx)); */
-    
- 
-    /*   n_markers = strlen(gtstr); */
-    /*   max_md_gts = (long)(max_md_factor*(double)n_markers/(double)chunk_size); */
-    /*   Gts* the_gts = construct_gts(id, gtstr); */
-    /*   if(the_gts->missing_data_count <= max_md_gts){ */
-
-    /* 	add_gts_to_vgts(the_vgts, the_gts); */
-    /*   }else{ */
-    /* 	add_gts_to_vgts(the_bad_vgts, the_gts); */
-    /*   } */
-    /* }else{ */
-    /*   exit(EXIT_FAILURE); */
-    /* } */
-
-    /* while ((nread = getline(&line, &len, in_stream)) != -1) { // read the rest of the lines with genotypes */
-    /*   if(fraction_to_analyze >= 1  || (double)rand()/RAND_MAX < fraction_to_analyze){  */
-    /* 	char* id = (char*)malloc(max_accession_id_length*sizeof(char)); */
-    /* 	char* gtstr = (char*)malloc(nread*sizeof(char));  */
-    /* 	sscanf(line, "%s %s", id, gtstr); */
-    /* 	if(id[0] == '#') break; // in case there are comments at end */
-    /* 	if(strlen(gtstr) != n_markers){ fprintf(stderr, "Inconsistency in number of markers.\n"); exit(EXIT_FAILURE);} // check number of genotypes is same. */
-    /* 	Gts* the_gts = construct_gts(id, gtstr); */
-    /* 	if(the_gts->missing_data_count <= max_md_gts){  */
-    /* 	  add_gts_to_vgts(the_vgts, the_gts); */
-    /* 	}else{ */
-    /* 	  add_gts_to_vgts(the_bad_vgts, the_gts); */
-    /* 	} */
-    /* 	if(max_number_of_accessions > 0  &&  the_vgts->size >= max_number_of_accessions) break; */
-    /*   } */
-    /* } // end of while */
-    /* free(line); */
-
-    /* fprintf(stderr, "# max missing data markers: %ld; %ld good accessions, %ld bad accessions \n", */
-    /* 	    max_md_gts, the_vgts->size, the_bad_vgts->size); */
-    /* fprintf(stderr, "# done reading genotypes data. %ld accessions, %ld markers.  Time to read input: %8.2f\n", the_vgts->size, n_markers, hi_res_time() - start); */
-    /* }else{  */
-
-    // same but using subroutine
       the_vgts = construct_vgts_from_genotypes_file(input_filename, chunk_size, max_md_factor);
-      //  }
-  } // end of if(DOSAGES){}else{}
-  n_markers = the_vgts->a[0]->n_markers;
+        n_markers = the_vgts->a[0]->n_markers;
+  } 
+
   if(DO_ASSERT) check_gts_indices(the_vgts);
   fclose(in_stream);
- 
 
+  fprintf(rparam_stream, "# n_chunks: %ld  chunk_size: %ld  max_est_agmr: %5.3lf rng seed: %u\n", n_chunks, chunk_size, max_est_agmr, rand_seed);
+  fclose(rparam_stream);
+  fprintf(stderr, "%s", rparam_buf);
+  fprintf(out_stream, "%s", rparam_buf);
 
-  // *****  done reading in genotype sets for all accessions  **********
-
+  // *****  done reading and storing input  **********
   
   start = hi_res_time();
   Vlong* marker_indices = construct_vlong_whole_numbers(n_markers);
@@ -388,26 +321,22 @@ main(int argc, char *argv[])
     fprintf(stderr, "# Number of chunks will be reduced to %ld\n", n_chunks);
   }
   set_vgts_chunk_patterns(the_vgts, marker_indices, n_chunks, chunk_size);
-  fprintf(rparam_stream, "# n_chunks: %ld  chunk_size: %ld  max_est_agmr: %5.3lf rng seed: %u\n", n_chunks, chunk_size, max_est_agmr, rand_seed);
-  fclose(rparam_stream);
-  fprintf(stderr, "%s", rparam_buf);
-  fprintf(out_stream, "%s", rparam_buf);
- 
+
   Chunk_pattern_ids* the_cpi = construct_chunk_pattern_ids(n_chunks, chunk_size);
   populate_chunk_pattern_ids_from_vgts(the_vgts, the_cpi);
   fprintf(stderr, "# time to construct chunk_pattern_ids structure: %12.6f\n", hi_res_time() - start);
 
-  long true_agmr_count;
-  start = hi_res_time();
-  //  if(1 || !do_H){
-  Vmci** query_vmcis;
-  query_vmcis = find_matches(the_vgts, the_cpi, min_usable_chunks, max_est_agmr);
-  true_agmr_count = print_results(the_vgts, query_vmcis, out_stream);
+  
+  start = hi_res_time(); 
+  Vmci** query_vmcis = find_matches(the_vgts, the_cpi, min_usable_chunks, max_est_agmr);
+  long true_agmr_count = print_results(the_vgts, query_vmcis, out_stream);
+  fprintf(stderr, "# time to find candidate matches and %ld true agmrs: %9.3f\n", true_agmr_count, hi_res_time() - start);
+  
+  // *****  clean up  *****
   for(long i=0; i< the_vgts->size; i++){
     free_vmci(query_vmcis[i]);
   }
-  free(query_vmcis);
-  fprintf(stderr, "# time to find candidate matches and %ld true agmrs: %9.3f\n", true_agmr_count, hi_res_time() - start);
+  free(query_vmcis); 
   fclose(out_stream);
   free_vlong(marker_indices);
   free_chunk_pattern_ids(the_cpi);
@@ -434,79 +363,59 @@ Vgts* construct_vgts_from_genotypes_file(char* filename, long chunk_size,  doubl
     exit(EXIT_FAILURE);
   }
 
-  // *****  read first line: 'MARKER followed by marker ids  *****
-  /* nread = getline(&line, &len, in_stream); // read first line. should have 'MARKER' and marker ids.  */
-  /* char mrkr[64]; */
-  /* sscanf(line, "%s", mrkr); */
-  /* if(strcmp(mrkr, "MARKER") !=0){ */
-  /*   fprintf(stderr, "Start of first line: %s ; should be MARKER. Bye.\n", mrkr); // should start with 'MARKER' */
-  /*   exit(EXIT_FAILURE); */
-  /* } */
-
+  // *****  read up through first non-comment line, which should be: "MARKER" followed by marker ids  *****
+  char a_string[64];
     while((nread = getline(&line, &len, in_stream)) != -1){ 
-    char string1[64];
-    sscanf(line, "%63s", string1);
-    if(string1[0] == '#') { fprintf(stderr, "comment line\n"); continue; } // skip comments
-    if(strcmp(string1, "MARKER") == 0){
+    sscanf(line, "%63s", a_string); // read first 63 non-whitespace chars (enough because just looking for "MARKER"
+    if(a_string[0] == '#') { fprintf(stderr, "comment line\n"); continue; } // skip comments
+    if(strcmp(a_string, "MARKER") == 0){
       break;
     }else{
-      fprintf(stderr, "Start of first line: %s ; should be MARKER. Bye.\n", string1); // should start with 'MARKER'
+      fprintf(stderr, "Start of first non-comment line: %s ; should be MARKER. Bye.\n", a_string);
       exit(EXIT_FAILURE);
     }
-  }
+    }
   
   // ***** read rest of file and store genotype sets and ids in Gts objs.  *****
-    // int max_accession_id_length = 200;
-  int init_vgts_capacity = 100; //
+  int init_vgts_capacity = 1000; //
   Vgts* the_vgts = construct_vgts(init_vgts_capacity);
   Vgts* the_bad_vgts = construct_vgts(init_vgts_capacity); // for accessions with too much missing data
   
   long n_markers, max_md_gts;
-  if((nread = getline(&line, &len, in_stream)) != -1){ // process first line with genotypes 
+  long n_genotype_lines_read = 0;
+  while((nread = getline(&line, &len, in_stream)) != -1){ // process first line with genotypes 
     char* id = (char*)malloc(nread*sizeof(char));
     char* gtstr = (char*)malloc(nread*sizeof(char));
-    char xxx[64];
-    fprintf(stderr, "# strings read (should be 2): %d\n", sscanf(line, "%s %s %63s", id, gtstr, xxx));
+    long n_strs_read = sscanf(line, "%s %s %63s", id, gtstr, a_string);
+    if(id[0] == '#') { free(id); free(gtstr); continue; }
+    if(n_strs_read != 2){
+      fprintf(stderr, "Read %ld strings on line; should be exactly 2.\n", n_strs_read);
+      exit(EXIT_FAILURE);
+    };
 
+    n_genotype_lines_read++;
+    if(n_genotype_lines_read == 1){
     n_markers = strlen(gtstr);
     max_md_gts = (long)(max_md_factor*(double)n_markers/(double)chunk_size);
-    Gts* the_gts = construct_gts(id, gtstr);
+    }else{
+      assert(strlen(gtstr) == n_markers);
+    }
+    Gts* the_gts = construct_gts(id, gtstr); // uses memory allocated above for id, gtstr - don't free until freeing the_vgts, etc.
     if(the_gts->missing_data_count <= max_md_gts){
       add_gts_to_vgts(the_vgts, the_gts);
     }else{
       add_gts_to_vgts(the_bad_vgts, the_gts);
     }
-  }else{
+  }
+  if(n_genotype_lines_read == 0){
     fprintf(stderr, "Input file %s has no data.\n", filename);
     exit(EXIT_FAILURE);
   }
-  fprintf(stderr, "done reading 1st genotype line. max_md_gts: %ld good/bad accessions: %ld %ld\n",
-	  max_md_gts, the_vgts->size, the_bad_vgts->size);
-  while ((nread = getline(&line, &len, in_stream)) != -1) { // read the rest of the lines with genotypes
-    //  if(fraction_to_analyze >= 1  || (double)rand()/RAND_MAX < fraction_to_analyze){
-    
-      char* id = (char*)malloc(nread*sizeof(char));
-      char* gtstr = (char*)malloc(nread*sizeof(char)); 
-      sscanf(line, "%s %s", id, gtstr);
-      if(id[0] == '#') continue; // skip comment lines
-      //  fprintf(stderr, "id: %s\n", id);
-      if(strlen(gtstr) != n_markers){ fprintf(stderr, "Inconsistency in number of markers.\n"); exit(EXIT_FAILURE);} // check number of genotypes is same.
-      Gts* the_gts = construct_gts(id, gtstr);
-      if(the_gts->missing_data_count <= max_md_gts){ 
-	add_gts_to_vgts(the_vgts, the_gts);
-      }else{
-	add_gts_to_vgts(the_bad_vgts, the_gts);
-      }
-      // if(max_number_of_accessions > 0  &&  the_vgts->size >= max_number_of_accessions) break;
-      //  }
-  } // end of while
+
   free(line);
-  fprintf(stderr, "done reading 1st genotype line. max_md_gts: %ld good/bad accessions: %ld %ld\n",
-	  max_md_gts, the_vgts->size, the_bad_vgts->size);
   fprintf(stderr, "# max missing data markers: %ld; %ld good accessions, %ld bad accessions \n", max_md_gts, the_vgts->size, the_bad_vgts->size);
   //  fprintf(stderr, "# done reading genotypes data. %ld accessions, %ld markers.  Time to read input: %8.2f\n", the_vgts->size, n_markers, hi_res_time() - start);
-  //  free_vgts(the_bad_vgts);
-  // fprintf(stderr, "bad vgts freed.\n");
+  free_vgts(the_bad_vgts); //fprintf(stderr, "bad vgts freed.\n");
   return the_vgts;
 }
 
@@ -522,10 +431,11 @@ long determine_file_format(char* filename){
   char *line = NULL;
   size_t len = 0;
   ssize_t nread;
-  long return_value = UNKNOWN_FILE_TYPE;
+  long return_value = UNKNOWN;
+  
   // read any comment lines and first non-comment line, which should start with 'MARKER'
-  while((nread = getline(&line, &len, in_stream)) != -1){ 
-    char string1[64];
+  char string1[64];
+  while((nread = getline(&line, &len, in_stream)) != -1){   
     sscanf(line, "%63s", string1);
     if(string1[0] == '#') continue; // skip comments
     if(strcmp(string1, "MARKER") == 0){
@@ -539,9 +449,9 @@ long determine_file_format(char* filename){
   nread = getline(&line, &len, in_stream);
   char* id = (char*)malloc(nread*sizeof(char));
   char* gtstr = (char*)malloc(nread*sizeof(char));
-  char xxx[64];
-  long n_strs_read = (long)sscanf(line, "%s %s %63s", id, gtstr, xxx);
-  fprintf(stderr, "n_strs_read: %ld\n", n_strs_read);
+  char a_string[64];
+  long n_strs_read = (long)sscanf(line, "%s %s %63s", id, gtstr, a_string);
+  // fprintf(stderr, "n_strs_read: %ld\n", n_strs_read);
   if(n_strs_read == 2){
     return_value = GENOTYPES;
   }else if(n_strs_read == 3){ // at least 3 fields present; assume DOSAGES
@@ -553,7 +463,7 @@ long determine_file_format(char* filename){
    
 
 // *****  Gts  ****************************************************
-Gts* construct_gts(char* id, char* genotypes){
+Gts* construct_gts(char* id, char* genotypes){ // does not alloc memory for id, genotypes and copy them, just uses already allocated memory.
   Gts* the_gts = (Gts*)malloc(1*sizeof(Gts));
   the_gts->id = id;
   the_gts->genotypes = genotypes;
@@ -610,20 +520,8 @@ long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long 
     } // end of loop over the k chars in a chunk.
     add_long_to_vlong(chunk_pats, i_pat);
     
-    //   fprintf(stderr, "acc idx: %ld   i_chunk: %ld ipat: %ld  n_homozygs: %ld  n_usable_chunks: %ld \n", the_gts->index, i_chunk, i_pat, n_homozygs, n_h_usable_chunks);
-    /* if(n_homozygs >= min_homozyg_count  &&  i_pat < n_patterns) { */
-    /*   n_h_usable_chunks++; // exclude missing data chunks! */
-    /*   n_usable_homozygs += n_homozygs; */
-    /* } */
-    //  the_gts->chunk_homozyg_counts->a[i_chunk] = n_homozygs;
-
-    
   } // loop over chunks.
   the_gts->chunk_patterns = chunk_pats;
-
-  /* the_gts->h_usable_chunk_count = n_h_usable_chunks; */
-  /* the_gts->h_usable_homozygs_count = n_usable_homozygs; */
-  
   the_gts->md_chunk_count = gts_mdchunk_count;
   return gts_mdchunk_count;
 }
@@ -636,10 +534,10 @@ char* print_gts(Gts* the_gts, FILE* ostream){
 }
 
 void free_gts(Gts* the_gts){
+    if(the_gts == NULL) return;
   free(the_gts->id);
   free(the_gts->genotypes);
   free_vlong(the_gts->chunk_patterns);
-  // free_vlong(the_gts->chunk_homozyg_counts);
   free(the_gts);
 }
 
@@ -747,6 +645,7 @@ void check_gts_indices(Vgts* the_vgts){
 }
 
 void free_vgts(Vgts* the_vgts){
+  if(the_vgts == NULL) return;
   for(long i=0; i< the_vgts->size; i++){
     free_gts(the_vgts->a[i]);
   }
@@ -768,6 +667,7 @@ Pattern_ids* construct_pattern_ids(long n_patterns){
 }
 
 void free_pattern_ids(Pattern_ids* pat_ids){
+    if(pat_ids == NULL) return;
   for(long i=0; i<pat_ids->size; i++){
     if(pat_ids->a[i] != NULL) free_vlong(pat_ids->a[i]);
   }
@@ -792,6 +692,7 @@ Chunk_pattern_ids* construct_chunk_pattern_ids(long n_chunks, long chunk_size){ 
 }
 
 void free_chunk_pattern_ids(Chunk_pattern_ids* the_cpi){
+    if(the_cpi == NULL) return;
   for(long i=0; i< the_cpi->size; i++){
     free_pattern_ids(the_cpi->a[i]);
   }
@@ -883,6 +784,7 @@ void add_mci_to_vmci(Vmci* the_vmci, Mci* mci){
 }
 
 void free_vmci(Vmci* the_vmci){
+    if(the_vmci == NULL) return;
   for(long i=0; i< the_vmci->size; i++){
     free(the_vmci->a[i]);
   }

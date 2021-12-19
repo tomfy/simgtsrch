@@ -16,12 +16,14 @@ void set_accession_missing_data_count(Accession* the_accession, long missing_dat
   the_accession->missing_data_count = missing_data_count;
 }
 void free_accession(Accession* the_accession){
+    if(the_accession == NULL) return;
   free_vchar(the_accession->id);
   free_vchar(the_accession->genotypes);
   free(the_accession);
 }
 void free_accession_innards(Accession* the_accession){ // doesn't free the_accession itself
   // use to free each element of an array of Accession (not an array of Accession*)
+    if(the_accession == NULL) return;
   free_vchar(the_accession->id);
   free_vchar(the_accession->genotypes);
 }
@@ -47,6 +49,7 @@ void add_accession_to_vaccession(Vaccession* the_vacc, Accession* the_acc){
 }
 
 void free_vaccession(Vaccession* the_vacc){
+    if(the_vacc == NULL) return;
   for(long i=0; i<the_vacc->size; i++){
     free_accession(the_vacc->a[i]);
   }
@@ -352,6 +355,7 @@ void print_genotypesset_summary_info(FILE* fh, GenotypesSet* the_gtsset){
 }
 
 void free_genotypesset(GenotypesSet* the_gtsset){
+    if(the_gtsset == NULL) return;
   free_vstr(the_gtsset->marker_ids);
   free_vlong(the_gtsset->marker_missing_data_counts);
   //  fprintf(stderr, "n_accessions: %ld \n", the_gtsset->n_accessions);

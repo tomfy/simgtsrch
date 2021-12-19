@@ -66,6 +66,7 @@ void shuffle_vlong(Vlong* the_vlong){
 }
 
 void free_vlong(const Vlong* the_vlong){
+  if(the_vlong == NULL) return;
   free(the_vlong->a);
   free((Vlong*)the_vlong);
 }
@@ -129,6 +130,7 @@ void print_vstr(FILE* fh, Vstr* the_vstr){
 }
 
 void free_vstr(const Vstr* the_vstr){
+  if(the_vstr == NULL) return;
   for(long i=0; i<the_vstr->size; i++){ 
     free(the_vstr->a[i]);
   }
@@ -171,6 +173,7 @@ void print_vchar(FILE* fh, Vchar* the_vchar){
   fprintf(fh, "%s", the_vchar->a);
 }
 void free_vchar(const Vchar* the_vchar){
+  if(the_vchar == NULL) return;
   free(the_vchar->a);
   free((Vchar*)the_vchar);
 }
@@ -184,6 +187,7 @@ IndexId* construct_indexid(long idx, char* id){
 }
 
 void free_indexid(const IndexId* the_idxid){
+    if(the_idxid == NULL) return;
   free(the_idxid->id);
   free((IndexId*)the_idxid);
 }
@@ -269,6 +273,7 @@ void print_vidxid(FILE* fh, Vidxid* the_vidxid){
 }
 
 void free_vidxid(const Vidxid* the_vidxid){
+    if(the_vidxid == NULL) return;
   for(long i=0; i<the_vidxid->size; i++){
     free_indexid(the_vidxid->a[i]);
   }

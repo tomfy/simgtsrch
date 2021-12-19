@@ -832,6 +832,7 @@ long pedigree_ok(Pedigree_stats* p, double max_self_agmr12, double max_ok_hgmr, 
 }
 
 void free_pedigree(const Pedigree* the_pedigree){
+    if(the_pedigree == NULL) return;
   free(the_pedigree->pedigree_stats);
   free((Pedigree*) the_pedigree);
 }
@@ -983,6 +984,7 @@ Vpedigree* pedigree_alternatives(const Pedigree* the_pedigree, const GenotypesSe
 
 
 void free_vpedigree(const Vpedigree* the_vped){
+    if(the_vped == NULL) return;
   for(long i=0; i<the_vped->size; i++){
     free_pedigree(the_vped->a[i]);
   }
