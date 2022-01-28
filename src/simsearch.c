@@ -12,13 +12,12 @@
 #define UNKNOWN -1
 #define DOSAGES 0
 #define GENOTYPES 1
-//#define UNKNOWN_FILE_TYPE 2
 #define DO_ASSERT 1
 
 //***********************************************************************************************
 // **************  typedefs  ********************************************************************
 
-typedef struct{ // genotype set
+typedef struct{ // genotype set (i.e. the set of genotypes of one accession)
   char* id;
   long index;
   long n_markers;
@@ -132,7 +131,7 @@ main(int argc, char *argv[])
   long n_chunks = 100000; // default number of chunks (large number -> use all markers)
   long chunk_size = 8; // default number of genotype in each chunk 
   long max_number_of_accessions = -1;
-  double fraction_to_analyze = 1;
+  //  double fraction_to_analyze = 1;
   unsigned rand_seed = (unsigned)time(0);
   double max_md_factor = 1.0; // multiplies n_markers/chunk_size
   long max_md_gts;
@@ -168,7 +167,7 @@ main(int argc, char *argv[])
   while((c = getopt(argc, argv, "i:o:p:n:k:e:s:x:")) != -1){
     // i: input file name (required).
     // o: output file name. Default: output goes to stdout.
-    // p: keep each accession with probability p. (For test purposes) Default = 1
+    // p not implemented   // p: keep each accession with probability p. (For test purposes) Default = 1
     // n: number of chunks to use. Default: use each marker ~once.
     // k: chunk size (number of markers per chunk). Default: 8
     // e: max estimated agmr. Default: 0.2 (Calculate agmr only if quick est. is < this value.)
@@ -194,14 +193,14 @@ main(int argc, char *argv[])
 	}
       }
       break;
-    case 'p': // keep each accession with probability p (for testing with random smaller data set)
-      fprintf(stderr, "%s\n", optarg);
-      fraction_to_analyze = (double)atof(optarg);
-      if(fraction_to_analyze <= 0  || fraction_to_analyze > 1.0){
-	fprintf(stderr, "# fraction_to_analyze specified as %6.3f. Out of valid range; exiting.\n", fraction_to_analyze);
-	exit(EXIT_FAILURE);
-      }
-      break;
+    /* case 'p': // keep each accession with probability p (for testing with random smaller data set) */
+    /*   fprintf(stderr, "%s\n", optarg); */
+    /*   fraction_to_analyze = (double)atof(optarg); */
+    /*   if(fraction_to_analyze <= 0  || fraction_to_analyze > 1.0){ */
+    /* 	fprintf(stderr, "# fraction_to_analyze specified as %6.3f. Out of valid range; exiting.\n", fraction_to_analyze); */
+    /* 	exit(EXIT_FAILURE); */
+    /*   } */
+    /*   break; */
     case 'n': 
       n_chunks = (long)atoi(optarg);
       if(n_chunks <= 0){
@@ -265,15 +264,14 @@ main(int argc, char *argv[])
   }
   srand(rand_seed);
 
-  fprintf(rparam_stream, "# input file: %s  output to: %s  fraction of accessions to analyze: %5.3lf \n",
-	  input_filename, (output_filename == NULL)? "stdout" : output_filename, fraction_to_analyze);	  
+  fprintf(rparam_stream, "# input file: %s  output to: %s\n", input_filename, (output_filename == NULL)? "stdout" : output_filename);
+  fprintf(stderr, "# input file: %s \n", input_filename);	  
  
   // *****  done processing command line  *****
 
 
   
-  double start;
-  start = hi_res_time();
+  double start = hi_res_time();
 
   long n_markers;
   Vgts* the_vgts;
@@ -293,7 +291,7 @@ main(int argc, char *argv[])
      GenotypesSet* the_genotypes_set = construct_cleaned_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
   
     n_markers = the_genotypes_set->n_markers;
-    fprintf(stderr, "# after construct_cleaned_genotypesset. n markers kept: %ld\n", n_markers);
+    // fprintf(stderr, "# after construct_cleaned_genotypesset. n markers kept: %ld\n", n_markers);
     max_md_gts = (long)(max_md_factor*(double)n_markers/(double)chunk_size);
     the_vgts = construct_vgts_from_genotypesset(the_genotypes_set, max_md_gts);
   }else{
@@ -301,10 +299,15 @@ main(int argc, char *argv[])
     // ***** *****  read in genotype matrix file  ***** *****
       the_vgts = construct_vgts_from_genotypes_file(input_filename, chunk_size, max_md_factor);
         n_markers = the_vgts->a[0]->n_markers;
-  } 
+  }
 
   if(DO_ASSERT) check_gts_indices(the_vgts);
   fclose(in_stream);
+
+   if(n_chunks*chunk_size > n_markers){
+    n_chunks = n_markers/chunk_size;
+    // fprintf(stderr, "# Number of chunks will be reduced to %ld\n", n_chunks);
+  }
 
   fprintf(rparam_stream, "# n_chunks: %ld  chunk_size: %ld  max_est_agmr: %5.3lf rng seed: %u\n", n_chunks, chunk_size, max_est_agmr, rand_seed);
   fclose(rparam_stream);
@@ -316,15 +319,16 @@ main(int argc, char *argv[])
   start = hi_res_time();
   Vlong* marker_indices = construct_vlong_whole_numbers(n_markers);
   shuffle_vlong(marker_indices);
-  if(n_chunks*chunk_size > marker_indices->size){
-    n_chunks = marker_indices->size/chunk_size;
-    fprintf(stderr, "# Number of chunks will be reduced to %ld\n", n_chunks);
-  }
+  fprintf(stderr, "# after shuffle.\n");
   set_vgts_chunk_patterns(the_vgts, marker_indices, n_chunks, chunk_size);
-
+  fprintf(stderr, "# after set_vgts_chunk_patterns. chunk_size: %ld  n_chunks:  %ld \n", chunk_size, n_chunks);
+  // exit(0);
   Chunk_pattern_ids* the_cpi = construct_chunk_pattern_ids(n_chunks, chunk_size);
+  fprintf(stderr, "# after construct_chunk_pattern_ids.\n");
   populate_chunk_pattern_ids_from_vgts(the_vgts, the_cpi);
   fprintf(stderr, "# time to construct chunk_pattern_ids structure: %12.6f\n", hi_res_time() - start);
+
+  
 
   
   start = hi_res_time(); 
@@ -600,6 +604,7 @@ void set_vgts_chunk_patterns(Vgts* the_vgts, Vlong* m_indices, long n_chunks, lo
 
 void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the_cpi){
   long n_patterns = the_cpi->n_patterns;
+  fprintf(stderr, "# size of the_vgts: %ld\n", the_vgts->size);
   for(long i_gts=0; i_gts<the_vgts->size; i_gts++){
     Gts* the_gts = the_vgts->a[i_gts];
     if(DO_ASSERT) assert(i_gts == the_gts->index);
@@ -609,6 +614,7 @@ void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the
       if(the_chunk_patterns->a[i] == n_patterns){ mdcount++; }
     }
     for(long i_chunk=0; i_chunk<the_chunk_patterns->size; i_chunk++){
+      // fprintf(stderr, "# i_chunk: %ld \n", i_chunk);
       long the_pat = the_chunk_patterns->a[i_chunk];
       if(DO_ASSERT) assert(the_pat >= 0);
 
@@ -618,11 +624,16 @@ void populate_chunk_pattern_ids_from_vgts(Vgts* the_vgts, Chunk_pattern_ids* the
       Vlong* the_accidxs = the_cpi->a[i_chunk]->a[the_pat];	
       add_long_to_vlong(the_accidxs, the_gts->index);
     }
+    // fprintf(stderr, "# after loop\n");
   }
+  //  fprintf(stderr, "# after outer lop\n");
 
   long total_mdchunk_count = 0;
+  fprintf(stderr, "# the_cpi->size: %ld\n", the_cpi->size);
   for(long i=0; i<the_cpi->size; i++){
-    long chunk_md_count = the_cpi->a[i]->a[n_patterns]->size;
+    long chunk_md_count = (the_cpi->a[i]->a[n_patterns] == NULL)?
+      0 :  // there are no accessions having missing data for this chunk
+      the_cpi->a[i]->a[n_patterns]->size;
     total_mdchunk_count += chunk_md_count;
   } 
 }
@@ -843,9 +854,9 @@ Vmci** find_matches(Vgts* the_vgts, Chunk_pattern_ids* the_cpi, long min_usable_
   
     Gts* q_gts = the_vgts->a[i_query];
     long q_md_chunk_count = q_gts->md_chunk_count;
-    clock_t ticks_before_fcmc = clock();
+    //clock_t ticks_before_fcmc = clock();
     Vlong* chunk_match_counts = find_chunk_match_counts(q_gts, the_cpi, the_vgts->size);
-    fcmc_ticks += clock() - ticks_before_fcmc;
+    //fcmc_ticks += clock() - ticks_before_fcmc;
     
     for (long i_match = 0; i_match < i_query; i_match++){
       long matching_chunk_count = chunk_match_counts->a[i_match];
@@ -867,9 +878,9 @@ Vmci** find_matches(Vgts* the_vgts, Chunk_pattern_ids* the_cpi, long min_usable_
     } // end loop over potential matches to query
     free_vlong(chunk_match_counts);
   } // end loop over queries.
-  clock_t find_matches_ticks = clock() - start; 
-  fprintf(stderr, "# time in: find_chunk_match_count: %8.3lf; rest of find_matches: %8.3lf; find_matches total: %8.3lf\n",
-	  clock_ticks_to_seconds(fcmc_ticks), clock_ticks_to_seconds(find_matches_ticks - fcmc_ticks), clock_ticks_to_seconds(find_matches_ticks));
+  //clock_t find_matches_ticks = clock() - start; 
+  /* fprintf(stderr, "# time in: find_chunk_match_count: %8.3lf; rest of find_matches: %8.3lf; find_matches total: %8.3lf\n", */
+  /* 	  clock_ticks_to_seconds(fcmc_ticks), clock_ticks_to_seconds(find_matches_ticks - fcmc_ticks), clock_ticks_to_seconds(find_matches_ticks)); */
   return query_vmcis;
 }
 

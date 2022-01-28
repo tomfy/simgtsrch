@@ -63,13 +63,14 @@ GenotypesSet* read_dosages_file_and_store(FILE* g_stream, double delta){
   size_t len = 0;
   ssize_t nread;
 
-  long accessions_capacity = 2000;
+  long accessions_capacity = 2000; // initial size
   Vaccession* the_accessions = construct_vaccession(accessions_capacity); // (Vaccession*)malloc(accessions_capacity*sizeof(Vaccession)); 
 
   long markerid_count = 0;
   Vstr* marker_ids = construct_vstr(1000);
   char* saveptr = NULL;
   if((nread = getline(&line, &len, g_stream)) != -1){
+    saveptr = line;
     char* token = strtok_r(line, "\t \n\r", &saveptr);
     if((token == NULL)  || (strcmp(token, "MARKER") != 0)){
       fprintf(stderr, "token: %s (should be MARKER)\n", token);
@@ -82,13 +83,14 @@ GenotypesSet* read_dosages_file_and_store(FILE* g_stream, double delta){
       add_string_to_vstr(marker_ids, strcpy(mrkr_id, token)); // store
       markerid_count++;
     }
-  }
+  } // done reading first line (with marker ids)
 
   long accession_count = 0;
   // long* missing_data_counts = (long*)calloc(markerid_count, sizeof(long));
   Vlong* the_md_vlong = construct_vlong_zeroes(markerid_count); // construct_vlong_from_array(markerid_count, missing_data_counts);
   while((nread = getline(&line, &len, g_stream)) != -1){
-  
+    saveptr = line;
+    //  fprintf(stderr, "line: %s \n", line);
     char* token = strtok_r(line, "\t \n\r", &saveptr);
     char* acc_id = strcpy((char*)malloc((strlen(token)+1)*sizeof(char)), token);
     long marker_count = 0;
@@ -99,7 +101,7 @@ GenotypesSet* read_dosages_file_and_store(FILE* g_stream, double delta){
       token = strtok_r(NULL, "\t \n\r", &saveptr);
       if(token == NULL) break;
       double dosage = atof(token);
-
+      //   fprintf(stderr, "dosage: %lf \n", dosage);
       if(dosage <= delta){
 	genotypes[marker_count] = '0';
       }else if((dosage >= 1-delta) && (dosage <= 1+delta)){
@@ -113,6 +115,7 @@ GenotypesSet* read_dosages_file_and_store(FILE* g_stream, double delta){
       }
       marker_count++;
     } // done reading dosages for all markers, and rounding to 0, 1, 2, 3
+    //  fprintf(stderr, "marker counts: %ld %ld \n", marker_count, markerid_count);
     if(marker_count != markerid_count) exit(EXIT_FAILURE);
     /* if(accession_count == accessions_capacity){ // accession_count is the number of accessions already stored in the_accessions */
     /*   accessions_capacity *= 2; */
@@ -131,7 +134,7 @@ GenotypesSet* read_dosages_file_and_store(FILE* g_stream, double delta){
   
     accession_count++;
   } // done reading all lines
-
+  //  fprintf(stderr, "# Done reading all lines.\n");
   free(line); // only needs to be freed once.
   GenotypesSet* the_genotypes_set = //construct_genotypesset(accession_ids, marker_ids, genotypes_strings, the_md_vlong);
     construct_genotypesset(the_accessions, marker_ids, the_md_vlong, delta, 1);
@@ -332,7 +335,6 @@ GenotypesSet* construct_cleaned_genotypesset(const GenotypesSet* the_gtsset, dou
 							cleaned_marker_ids, cleaned_md_counts,
 							the_gtsset->delta, max_marker_md_fraction
 							);
-  fprintf(stderr, "# About to return cleaned_gtsset \n");
   return cleaned_gtsset;
 }
 
