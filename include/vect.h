@@ -59,6 +59,7 @@ void free_vstr(const Vstr* the_vstr); // free memory
 // *****  Vchar  *****
 Vchar* construct_vchar(long cap);
 Vchar* construct_vchar_from_str(char* str); // str is null-terminated str
+Vchar* copy_vchar(Vchar* avchar);
 Vchar* append_str_to_vchar(Vchar* the_vchar, char* str);
 void print_vchar(FILE* fh, Vchar* the_vchar);
 void free_vchar(const Vchar* the_vchar);

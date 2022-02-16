@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <unistd.h> // needed for getopt
 #include <assert.h>
-// #include "vect.h"
+//#include "vect.h"
 #include "gtset.h"
 #define UNKNOWN -1
 #define DOSAGES 0
@@ -18,10 +18,10 @@
 // **************  typedefs  ********************************************************************
 
 typedef struct{ // genotype set (i.e. the set of genotypes of one accession)
-  char* id;
+  Vchar* id;
   long index;
   long n_markers;
-  char* genotypes; // gtset; // should perhaps change name to avoid confusion with gtset.h
+  Vchar* genotypes; // gtset; // should perhaps change name to avoid confusion with gtset.h
   Vlong* chunk_patterns;
   long md_chunk_count; // number of chunks with missing data (in >= 1 gt in the chunk)
   long missing_data_count; // number of gts with missing data.
@@ -570,14 +570,14 @@ long determine_file_format(char* filename){
 // *****  Gts  ****************************************************
 Gts* construct_gts(char* id, char* genotypes){ // does not alloc memory for id, genotypes and copy them, just uses already allocated memory.
   Gts* the_gts = (Gts*)malloc(1*sizeof(Gts));
-  the_gts->id = id;
-  the_gts->genotypes = genotypes;
+  the_gts->id = construct_vchar_from_str(id);
+  the_gts->genotypes = construct_vchar_from_str(genotypes);
   the_gts->n_markers = strlen(genotypes);
   the_gts->chunk_patterns = NULL;
   the_gts->md_chunk_count = 0;
   long md_count = 0;
   for(long i=0; ; i++){
-    char a = the_gts->genotypes[i];
+    char a = the_gts->genotypes->a[i];
     if(a == '\0'){ the_gts->n_markers = i;  break; }
     if(a == '3'){
       md_count++;
@@ -608,7 +608,7 @@ long set_gts_chunk_patterns(Gts* the_gts, Vlong* m_indices, long n_chunks, long 
     // loop over characters in the chunk and construct a corresponding long index, in range [0..3^k] (3^k is the index for a chunk with any missing data)
     for(long j=0; j < k; j++){ 
       long idx = m_indices->a[i_chunkstart + j]; // 
-      char a = the_gts->genotypes[idx];
+      char a = the_gts->genotypes->a[idx];
       long l = (long)a - 48;
       if((l>=0) && (l<=2)){ // this char is ok (0, 1, or 2, not missing data)
 	i_pat += f*l;
@@ -635,13 +635,13 @@ char* print_gts(Gts* the_gts, FILE* ostream){
   // fprintf(ostream, "Gts index: %ld  gtset: %s\n", the_gts->index, the_gts->genotypes);
   // fprintf(ostream, "%s  %s\n", the_gts->id, the_gts->genotypes);
   fprintf(ostream, "XXX  %s %ld  %ld %ld %ld\n",
-	  the_gts->id, the_gts->index, the_gts->n_markers, strlen(the_gts->genotypes), the_gts->missing_data_count);
+	  the_gts->id->a, the_gts->index, the_gts->n_markers, the_gts->genotypes->length, the_gts->missing_data_count);
 }
 
 void free_gts(Gts* the_gts){
     if(the_gts == NULL) return;
-  free(the_gts->id);
-  free(the_gts->genotypes);
+  free_vchar(the_gts->id);
+  free_vchar(the_gts->genotypes);
   free_vlong(the_gts->chunk_patterns);
   free(the_gts);
 }
@@ -662,12 +662,14 @@ Vgts* construct_vgts_from_genotypesset(GenotypesSet* gtset, long max_md_gts){
   for(long i = 0; i<gtset->accessions->size; i++){
     Accession* acc = gtset->accessions->a[i];
     Gts* a_gts = (Gts*)malloc(sizeof(Gts));
-    a_gts->id = (char*)malloc((acc->id->length + 1)+sizeof(char)); // +1 is for the terminating null char
-    strcpy(a_gts->id, acc->id->a);
+    //  a_gts->id = (char*)malloc((acc->id->length + 1)+sizeof(char)); // +1 is for the terminating null char
+    //   strcpy(a_gts->id, acc->id->a);
+    a_gts->id = copy_vchar(acc->id);
     a_gts->index = acc->index;
     a_gts->n_markers = gtset->n_markers;
-    a_gts->genotypes = (char*)malloc((acc->genotypes->length + 1)+sizeof(char)); // +1 is for the terminating null char
-    strcpy(a_gts->genotypes, acc->genotypes->a);
+    //  a_gts->genotypes = (char*)malloc((acc->genotypes->length + 1)+sizeof(char)); // +1 is for the terminating null char
+    //  strcpy(a_gts->genotypes, acc->genotypes->a);
+    a_gts->genotypes = copy_vchar(acc->genotypes);
     a_gts->missing_data_count = acc->missing_data_count;
     //  print_gts(a_gts, stderr);
     if(a_gts->missing_data_count <= max_md_gts){ 
@@ -912,8 +914,8 @@ void free_vmci(Vmci* the_vmci){
 // *********************************************
 
 double agmr(Gts* gtset1, Gts* gtset2, double* hgmr){
-  char* gts1 = gtset1->genotypes;
-  char* gts2 = gtset2->genotypes;
+  char* gts1 = gtset1->genotypes->a;
+  char* gts2 = gtset2->genotypes->a;
   long usable_pair_count = 0; // = agmr_denom
   long mismatches = 0; // = agmr_numerator
   long hgmr_denom = 0;
@@ -1003,7 +1005,7 @@ long print_results(Vgts* the_vgts, Vmci** query_vmcis, FILE* ostream){
       Gts* q_gts = the_vgts->a[i_q];
       Gts* m_gts = the_vgts->a[the_mci->match_index];
       fprintf(ostream, "%5ld %30s %30s  %5.2f  %4ld  %7.4f  %7.4f    %7.4f  ", //  %7.4f\n",
-	      i_q,  the_vgts->a[i_q]->id,  the_vgts->a[the_mci->match_index]->id,
+	      i_q,  the_vgts->a[i_q]->id->a,  the_vgts->a[the_mci->match_index]->id->a,
 	      the_mci->usable_chunks,  the_mci->n_matching_chunks,
 	      the_mci->est_agmr,  the_mci->agmr,
 	      the_mci->hgmr);

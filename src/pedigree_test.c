@@ -50,8 +50,10 @@ main(int argc, char *argv[])
   // A: pedigree alternatives 0, 1, or 2
   // c: do checks,
   // d: dosages filename, g: genotypes filename (must have either d or g)
-  // p: pedigree filename,  w (width for rounding is +-w),
-  // x: max fraction of missing data for markers, o: output filename.
+  // p: pedigree filename,
+  // w: (width for rounding is +-w),
+  // x: max fraction of missing data for markers,
+  // o: output filename.
   // a: max 'self' agmr, h: max ok hgmr,  r: max 'self' r, D: max ok d;
   int c;
   int genotype_file_type = UNKNOWN;

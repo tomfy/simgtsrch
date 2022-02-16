@@ -139,22 +139,27 @@ void free_vstr(const Vstr* the_vstr){
 }
 
 // *****  Vchar  *****
-Vchar* construct_vchar(long cap){ // 
+Vchar* construct_vchar(long cap){ 
   Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
   if(cap < 1) cap = 1;
   the_vchar->a = (char*)malloc(cap*sizeof(char));
   the_vchar->capacity = cap;
-  the_vchar->a[0] = '\0'; 
+  the_vchar->a[0] = '\0'; // initialize to a 0-length null-terminated string
   the_vchar->length = 0; // this is the length of the string stored, NOT including the terminating null.
   return the_vchar;
 }
 
-Vchar* construct_vchar_from_str(char* str){ // copied str into newly allocated memory.
+Vchar* construct_vchar_from_str(char* str){ // copy str into newly allocated memory.
   Vchar* the_vchar = (Vchar*)malloc(sizeof(Vchar));
   the_vchar->length = (long)strlen(str);
   the_vchar->capacity = the_vchar->length+1;
   the_vchar->a = strcpy((char*)malloc(the_vchar->capacity*sizeof(char)), str);
   return the_vchar;
+}
+
+Vchar* copy_vchar(Vchar* avchar){
+  Vchar* the_copy = construct_vchar_from_str(avchar->a);
+  return the_copy;
 }
 
 // ***** append a string to vchar after enlarging capacity with realloc if needed *****

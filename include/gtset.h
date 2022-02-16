@@ -7,7 +7,10 @@
 typedef struct{
   Vchar* id;
   long index; // the index in the accessions array of GenotypesSet
+  long n_markers;
   Vchar* genotypes;
+  Vlong* chunk_patterns;
+  long md_chunk_count;
   long missing_data_count;
 }Accession;
 
