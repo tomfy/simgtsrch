@@ -15,20 +15,20 @@ Vlong* construct_vlong(long cap){
   return the_vlong;
 }
 
-Vlong* construct_vlong_from_array(long size, long* array){ // construct from (dynamically allocated) array of known size.
-  Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong));
-  the_vlong->capacity = size;
-  the_vlong->size = size;
-  the_vlong->a = array; // array must have been allocated dynamically.
-  return the_vlong;
-}
+/* Vlong* construct_vlong_from_array(long size, long* array){ // construct from (dynamically allocated) array of known size. */
+/*   Vlong* the_vlong = (Vlong*)malloc(1*sizeof(Vlong)); */
+/*   the_vlong->capacity = size; */
+/*   the_vlong->size = size; */
+/*   the_vlong->a = array; // array must have been allocated dynamically. */
+/*   return the_vlong; */
+/* } */
 
 Vlong* construct_vlong_zeroes(long size){
-  long* zeroes = (long*)calloc(size, sizeof(long));
   Vlong* the_vlong = (Vlong*)malloc(sizeof(Vlong));
+  // long* zeroes = (long*)calloc(size, sizeof(long));
   the_vlong->capacity = size;
   the_vlong->size = size;
-  the_vlong->a = zeroes;
+  the_vlong->a = (long*)calloc(size, sizeof(long)); //zeroes;
   return the_vlong;
 }
 
@@ -71,7 +71,7 @@ void free_vlong(const Vlong* the_vlong){
   free((Vlong*)the_vlong);
 }
 
-// *****  Vstr  ***************************************************
+// *****  Vstr  ***************************************************x
 
 Vstr* construct_vstr(long cap){
   Vstr* the_vstr = (Vstr*)malloc(1*sizeof(Vstr));

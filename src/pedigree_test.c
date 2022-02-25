@@ -79,6 +79,7 @@ main(int argc, char *argv[])
 	fprintf(stderr, "Failed to open %s for reading.\n", genotypes_filename);
 	exit(EXIT_FAILURE);
       }
+      fclose(g_stream);
       genotype_file_type = DOSAGES;
       break;
     case 'g':
@@ -87,8 +88,8 @@ main(int argc, char *argv[])
       if(g_stream == NULL){
 	fprintf(stderr, "Failed to open %s for reading.\n", genotypes_filename);
 	exit(EXIT_FAILURE);
-
       }
+      fclose(g_stream);
       genotype_file_type = GENOTYPES;
       break;
     case 'p':
@@ -203,42 +204,49 @@ main(int argc, char *argv[])
 
   // ***************  read the genotypes file  *******************************
   double t_start = hi_res_time();
+  GenotypesSet* the_raw_genotypes_set;
   GenotypesSet* the_genotypes_set;
+  if(1){
   if(genotype_file_type == DOSAGES){
     //  fprintf(stderr, "# dosages branch \n");
-    GenotypesSet* the_raw_genotypes_set = read_dosages_file_and_store(g_stream, delta);
-  
-    fclose(g_stream);
+    the_raw_genotypes_set = read_dosages_file_and_store(genotypes_filename, delta);
     // print_genotypesset_summary_info(stderr, the_raw_genotypes_set); 
    
-    if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
+    if(DBUG && do_checks_flag) check_genotypesset(the_raw_genotypes_set);
   
     fprintf(stderr, "# Done reading in genotype data. %ld accessions and %ld markers. Time: %10.4lf sec.\n",
 	    the_raw_genotypes_set->n_accessions, the_raw_genotypes_set->n_markers, hi_res_time() - t_start);
- 
-    // *****  clean genotypes set, i.e. remove markers with high missing data  ****
-    t_start = hi_res_time();
-    the_genotypes_set = construct_cleaned_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
+
+    if(0){
+      // *****  clean genotypes set, i.e. remove markers with high missing data  ****
+      t_start = hi_res_time();
+      the_genotypes_set = construct_cleaned_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
 
     
-    //  check_gtsset(the_cleaned_genotypes_set);
-    long n_markers_good = the_genotypes_set->n_markers;
-    free_genotypesset(the_raw_genotypes_set); // free the raw genotypes set; use the cleaned one.
-    print_genotypesset_summary_info(stderr, the_genotypes_set);
+      //  check_gtsset(the_cleaned_genotypes_set);
+      long n_markers_good = the_genotypes_set->n_markers;
+      free_genotypesset(the_raw_genotypes_set); // free the raw genotypes set; use the cleaned one.
+      print_genotypesset_summary_info(stderr, the_genotypes_set);
 
-    //  fprintf(stderr, "# Removing markers with excessive fraction (> %5.3lf) missing data.\n", max_marker_missing_data);
-    if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set, max_marker_missing_data);
-    //   fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %10.4lf sec.\n", n_markers_good, hi_res_time() - t_start);
-    FILE* og_stream = fopen(genotypes_matrix_output_filename, "w");
-    print_genotypesset(og_stream, the_genotypes_set);
-    fclose(og_stream);
+    
+      //  fprintf(stderr, "# Removing markers with excessive fraction (> %5.3lf) missing data.\n", max_marker_missing_data);
+      if(DBUG && do_checks_flag) check_genotypesset(the_genotypes_set);
+      //   fprintf(stderr, "# Done cleaning marker set. Keeping %ld markers. Time: %10.4lf sec.\n", n_markers_good, hi_res_time() - t_start);
+      FILE* og_stream = fopen(genotypes_matrix_output_filename, "w");
+      print_genotypesset(og_stream, the_genotypes_set);
+      fclose(og_stream);
+    }
   }else if(genotype_file_type == GENOTYPES){
-    the_genotypes_set = read_genotypes_file_and_store(g_stream);
+    the_raw_genotypes_set = read_genotypes_file_and_store(genotypes_filename);
   }else{
     fprintf(stderr, "genotype_file_type: %d (should be 0 or 1)\n", genotype_file_type);
-    exit(EXIT_FAILURE); // no input file specified.
+    exit(EXIT_FAILURE); // unrecognized genotype file type.
   }
- 
+
+  
+
+  the_genotypes_set = construct_cleaned_genotypesset(the_raw_genotypes_set, max_marker_missing_data);
+  } 
   
   t_start = hi_res_time();
   Vidxid* the_vidxid = construct_sorted_vidxid(the_genotypes_set);

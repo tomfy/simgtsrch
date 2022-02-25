@@ -10,7 +10,7 @@ LIBS=-lm
 _DEPS = vect.h gtset.h pedigree.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ1 = vect.o simsearch.o gtset.o pedigree.o
+_OBJ1 = vect.o simsearch.o gtset.o pedigree.o various.o
 OBJ1 = $(patsubst %,$(ODIR)/%,$(_OBJ1))
 
 _OBJ2 = vect.o pedigree_test.o gtset.o pedigree.o
